@@ -1,0 +1,28 @@
+{
+  "name": "codex-live2d",
+  "version": "0.1.0",
+  "description": "Interactive Live2D companion for Codex desktop with streamed Fish Audio speech",
+  "type": "module",
+  "private": true,
+  "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nyan-mikan/codex-live2d.git"
+  },
+  "scripts": {
+    "setup": "node setup.mjs",
+    "doctor": "node doctor.mjs",
+    "start": "node control.mjs start --restart",
+    "reload": "node control.mjs start --reload",
+    "stop": "node control.mjs remove",
+    "install:recovery": "node install-recovery.mjs",
+    "uninstall:recovery": "node install-recovery.mjs --uninstall",
+    "preview": "node preview-server.mjs",
+    "verify": "node inject.mjs --verify --port 19335",
+    "test": "node --test test-*.mjs",
+    "pack:source": "node scripts/package-source.mjs"
+  }
+}

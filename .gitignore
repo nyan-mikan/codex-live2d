@@ -1,0 +1,14 @@
+# Local settings, credentials, logs and diagnostics
+/state/
+/dist/
+/LOCAL_INSTALL.md
+.env
+.env.*
+*.key
+*.pem
+.DS_Store
+node_modules/
+# User-supplied character assets and proprietary Cubism runtime
+/model/*
+!/model/README.md
+/vendor/live2d.min.js

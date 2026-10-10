@@ -1,0 +1,67 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import {fileURLToPath} from 'node:url';
+import {spawn,execFile} from 'node:child_process';
+import {promisify} from 'node:util';
+import {targets,isCodexMain} from './cdp.mjs';
+import {appRunning} from './app-process.mjs';
+import {appPath,appInfo} from './app-config.mjs';
+import {checkAssets} from './setup.mjs';
+const execute=promisify(execFile);
+const root=path.dirname(fileURLToPath(import.meta.url)), stateDir=path.join(root,'state');
+const command=process.argv[2]||'start', restart=process.argv.includes('--restart');
+const fromRecovery=process.argv.includes('--from-recovery');
+if(process.argv.includes('--delayed'))await new Promise(resolve=>setTimeout(resolve,4000));
+const port=19335, app=appPath;
+await fs.mkdir(stateDir,{recursive:true});
+const stopFile=path.join(stateDir,'stop'),pidFile=path.join(stateDir,'watcher.json');
+async function stopWatcher(){await fs.writeFile(stopFile,'stop\n');await new Promise(r=>setTimeout(r,2800));}
+async function checkRecovery(){if(fromRecovery&&await fs.access(path.join(stateDir,'recovery-disabled')).then(()=>true,()=>false))throw new Error('自动恢复已关闭。');}
+async function launchPhase(phase){await fs.writeFile(path.join(stateDir,'launcher-status.json'),JSON.stringify({phase,checkedAt:new Date().toISOString()},null,2)+'\n');}
+if(command==='remove'){
+  await fs.writeFile(path.join(stateDir,'recovery-disabled'),'disabled\n');
+  await stopWatcher();
+  try{const r=await execute(process.execPath,[path.join(root,'inject.mjs'),'--remove','--port',String(port)]);console.log(r.stdout);}catch(error){console.log(error.stderr||error.message);}
+  console.log('已关闭角色并停止守护进程。正常退出后再打开 ChatGPT，可关闭临时调试接口。');
+}else if(command==='start'){
+  if(process.platform!=='darwin')throw new Error('Desktop activation supports macOS only.');
+  await checkAssets();
+  await launchPhase('checking');
+  await checkRecovery();
+  if(!fromRecovery)await fs.unlink(path.join(stateDir,'recovery-disabled')).catch(()=>{});
+  let pages=(await targets(port)).filter(isCodexMain);
+  if(!pages.length){
+    const {executable,bundleId}=await appInfo();
+    const running=await appRunning(executable);
+    if(running&&!restart)throw new Error('ChatGPT 正在运行，需要重启以启用本机调试。请先退出，或明确使用 --restart。');
+    if(running){
+      await checkRecovery();
+      console.log('正在正常退出 ChatGPT，以启用仅本机可用的调试接口…');
+      await launchPhase('requesting-quit');
+      await execute('/usr/bin/osascript',['-e',`tell application id "${bundleId}" to quit`]);
+      await launchPhase('waiting-for-quit');
+      let exited=false;
+      for(let i=0;i<180;i++){if(!await appRunning(executable)){exited=true;break;}await new Promise(r=>setTimeout(r,500));}
+      if(!exited){await launchPhase('quit-blocked');throw new Error('ChatGPT 尚未正常退出；没有强制终止。请保存工作并手动退出后再次启动。');}
+    }
+    await checkRecovery();
+    await launchPhase('opening');
+    await execute('/usr/bin/open',['-na',app,'--args',`--remote-debugging-port=${port}`,'--remote-debugging-address=127.0.0.1']);
+    for(let i=0;i<60;i++){pages=(await targets(port)).filter(isCodexMain);if(pages.length)break;await new Promise(r=>setTimeout(r,500));}
+    if(!pages.length)throw new Error('应用已启动，但未发现可连接的 Codex 主界面调试入口。');
+  }
+  await launchPhase('injecting');
+  await stopWatcher();
+  await fs.unlink(stopFile).catch(()=>{});
+  await execute(process.execPath,[path.join(root,'inject.mjs'),process.argv.includes('--reload')?'--reload':'--show','--port',String(port)]);
+  const log=await fs.open(path.join(stateDir,'watcher.log'),'a');
+  const watcher=spawn(process.execPath,[path.join(root,'inject.mjs'),'--watch','--port',String(port)],{detached:true,stdio:['ignore',log.fd,log.fd]});
+  watcher.unref();await log.close();
+  await fs.writeFile(pidFile,JSON.stringify({pid:watcher.pid,port,startedAt:new Date().toISOString()},null,2)+'\n');
+  const result=await execute(process.execPath,[path.join(root,'inject.mjs'),'--verify','--port',String(port)]);
+  await fs.writeFile(path.join(stateDir,'activation.json'),JSON.stringify({activatedAt:new Date().toISOString(),verification:result.stdout.trim()},null,2)+'\n');
+  const {version}=await appInfo();
+  await fs.writeFile(path.join(stateDir,'debug-version.json'),JSON.stringify({version,confirmedAt:new Date().toISOString()},null,2)+'\n');
+  await launchPhase('ready');
+  console.log(result.stdout);console.log('角色入口已在主界面右下角启用。点击可打开模型或调整设置；收起后保留打开入口。');
+}else throw new Error('Usage: node control.mjs start [--restart] | remove');

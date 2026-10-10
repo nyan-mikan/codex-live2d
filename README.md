@@ -1,0 +1,159 @@
+# Codex Live2D
+
+**English** | [中文](README.zh-CN.md)
+
+An interactive Live2D companion in the bottom-right corner of Codex desktop, with optional streamed speech through Fish Audio.
+
+This is an independent macOS add-on. It attaches to the running desktop interface through a local debugging connection, without editing the application bundle. The renderer supports user-supplied Cubism 2.1 models without a built-in character or character assets.
+
+## Features
+
+- Mouse-following eyes and head, click interactions, optional user-configured expressions, and adjustable size and vertical position.
+- Circular settings and speaker buttons; collapsing the model keeps an entry to open it again.
+- New assistant body text is captured incrementally. Thinking, tool output, and commentary are excluded; completed history is skipped.
+- Optional Fish Audio speech, one sentence per request, with the next three sentences prefetched and decoded during playback.
+- A neutral face while speaking, with audio-driven mouth movement.
+- Markdown, emoji, citation/reference markers, and lowercase laughter such as `www` are removed before speech. URLs containing `www` are preserved.
+- Turning the speaker off stops playback and requests and clears queued audio. Turning it back on reads future text only.
+- Optional login service that detects lost startup arguments after an application update and attempts recovery.
+
+## Requirements
+
+- macOS and Node.js **22 or later**; npm comes with Node.js.
+- The Codex desktop application. `/Applications/ChatGPT.app` and `/Applications/Codex.app` are detected automatically.
+- A **Cubism 2.1** model (`.model.json` and `.moc`) and its textures/resources.
+- A compatible Cubism 2.1 `live2d.min.js` runtime that you supply separately.
+- A Fish Audio API key and voice `reference_id` only if you want speech.
+
+The GitHub repository and source ZIP include the program and permissively licensed browser libraries. **Character assets and the proprietary Live2D runtime are not included.** No npm dependencies need to be installed; the browser libraries are already pinned and bundled. See [third-party notices](THIRD_PARTY_NOTICES.md).
+
+## Install
+
+### 1. Get the project
+
+```sh
+git clone https://github.com/nyan-mikan/codex-live2d.git
+cd codex-live2d
+node --version
+```
+
+Keep this folder in a permanent location if you enable the recovery service.
+
+### 2. Import your model and runtime
+
+For a model whose entry is `model.model.json`:
+
+```sh
+npm run setup -- --model-dir "/path/to/model" --runtime "/path/to/model.min.js"
+```
+
+For a different Cubism 2.1 entry name:
+
+```sh
+npm run setup -- --model-dir "/path/to/model" --model-entry "custom.model.json" --runtime "/path/to/model.min.js"
+```
+
+The importer validates the referenced files, copies them into `model/`, and stores the entry as `model.model.json`. It does not copy unrelated files. Models using `.model3.json`/`.moc3` need a different renderer and are not supported here. The runtime must be the Cubism **2.1** library, not `live2dcubismcore.min.js`.
+
+Expression presets are optional and supplied in a local model profile; no character-specific presets or fixed motion indexes are built in. Obtain assets and runtimes under their applicable terms; [upstream runtime guidance](https://github.com/guansss/pixi-live2d-display#cubism-core) explains the distinction.
+
+### 3. Check and start
+
+```sh
+npm run doctor
+npm start
+```
+
+Starting may normally quit and reopen Codex to enable the local debug endpoint at `127.0.0.1:19335` (or local IPv6). Finish active work first. If macOS asks for permission to control the app, allow it; if Codex asks whether to quit, confirm it. The launcher waits for normal exit and never force-kills the app.
+
+You can also double-click `Start.command`. The gear button opens settings; the speaker button toggles speech.
+
+For a nonstandard application location, set this before starting and installing recovery:
+
+```sh
+export CODEX_APP_PATH="/path/to/Codex.app"
+npm start
+```
+
+### 4. Optional: enable update recovery
+
+```sh
+npm run install:recovery
+```
+
+This registers `~/Library/LaunchAgents/com.codex-live2d.recovery.plist` for your user account. It checks every 10 seconds. When the installed version changes and the app is running without its debug endpoint, it waits at least 45 seconds, then tries a normal restart and reattaches the companion. The service remembers the selected app path and the Node/project paths used at installation.
+
+A quit confirmation may still require your action. A failed attempt is not repeated during the same app run; after you quit and reopen the app, it may try again. It does not reopen an intentionally quit app. Normal launches of the same version without debugging are left alone.
+
+After importing assets, `Install.command` combines first launch and recovery-service installation.
+
+## Optional model profile
+
+Use `npm run setup -- --profile "/path/to/profile.json"` to configure parameters for your own model. The profile is stored locally as `model/profile.json` and excluded from Git and source archives. Without a profile, the companion offers mouse tracking, motions, speech and a neutral-expression control, with no predefined character expressions. Clicks select available motions rather than fixed indexes.
+
+See [the generic example](docs/model-profile.example.json). `neutral` and `speechNeutral` hold parameter-to-number maps; `expressions` holds named `{label, parameters}` entries. `mouthParameter`, `idleMotionGroup` and `clickMotionGroup` select model-specific identifiers. The default identifiers follow Cubism 2 conventions and can be overridden. Use values appropriate for your own model.
+
+## Fish Audio settings
+
+Open the gear → **语音设置 · Fish Audio** and enter:
+
+| Setting | Meaning |
+| --- | --- |
+| `FISH_API_KEY` | Your Fish Audio API key; entered in the password field |
+| `reference_id` | The voice identifier |
+| Model | The Fish speech model name, entered manually |
+| 自动朗读新正文 | Enable speech for new assistant body text |
+| 记住 API Key | Optional plaintext storage on this computer |
+
+The default model name is `s2.1-pro-free`; availability depends on your account. Refer to the [Fish Audio API documentation](https://docs.fish.audio/api-reference/endpoint/openapi-v1/text-to-speech) for current names. Save your settings, then use **试听** to try the voice.
+
+The key stays in the watcher process by default. If you select “remember,” it is saved in `state/fish-config.json` with owner-only file permissions. That directory is ignored by Git and source packaging. Without remembering, enter the key again after restarting the watcher.
+
+When speech is enabled, cleaned assistant body sentences are sent to Fish Audio. The bridge does not persist answer bodies; audio is cached in memory. Turning speech off cancels playback and synthesis, including prefetch. No body-text popup is shown above the companion.
+
+## Stop, uninstall, or relocate
+
+```sh
+npm run stop                  # remove the companion and disable recovery
+npm run uninstall:recovery    # unregister the user login service
+```
+
+`Stop.command` also removes the companion. Normally quit and reopen Codex afterward to close the temporary debugging endpoint. `npm start` re-enables the companion and recovery if the service remains installed.
+
+Before moving the folder, stop the companion and uninstall recovery from the old folder. Start it and install recovery again from the new folder. Do not run multiple copies of the watcher/service for the same endpoint.
+
+## Development
+
+```sh
+npm test             # text, speech queue, recovery and model-import tests
+npm run preview      # local preview at http://127.0.0.1:19436 (requires assets)
+npm run verify       # inspect the current desktop attachment
+npm run reload       # reload changed code and restart the watcher
+npm run pack:source  # ZIP of committed source under dist/ (requires a Git commit)
+```
+
+Tests mock Fish Audio and do not send paid synthesis requests. `npm run pack:source` refuses a Git tree containing local state, model assets or the proprietary runtime.
+
+| File | Responsibility |
+| --- | --- |
+| `renderer.js` | Model rendering, expressions, position and controls |
+| `answer-bridge.js` | Incremental assistant-body capture |
+| `speech-text.js` | Text cleanup and sentence tracking |
+| `fish-client.js` / `fish-host.mjs` | Speech queue, prefetch, playback and API transport |
+| `inject.mjs` / `cdp.mjs` | Local attachment and watcher |
+| `control.mjs` / `recovery*.mjs` | Launch, removal and update recovery |
+| `setup.mjs` | Import and validate local model/runtime resources |
+
+## Troubleshooting and compatibility
+
+- **Model missing after an update:** inspect `state/recovery-status.json` and `state/recovery.log`. Finish active work, confirm normal exit, then run `npm start` if recovery could not complete.
+- **Missing assets:** rerun setup with the entire model directory and a compatible runtime; `npm run doctor` reports missing resources.
+- **No speech:** check the speaker toggle, API key, voice ID and model. Some audio contexts need a user click to start playback.
+- **Model closed:** reopen it from the gear entry; to restore a fully removed companion, run `npm start`.
+- **Work/Chat views:** the bridge includes adapters for Codex, ChatGPT Work and ChatGPT Chat data. They depend on internal page metadata; verify your installed build. Automatic compatibility across future updates is not guaranteed.
+
+The original attachment was exercised on desktop builds 26.1002.52244 and 26.1007.21159. This is not an official extension API, and UI updates may require adapter changes. Windows and Linux desktop activation are not implemented. Settings UI currently uses Chinese labels.
+
+## License
+
+Project code: [MIT](LICENSE). Browser-library licenses: [third-party notices](THIRD_PARTY_NOTICES.md). Model assets, Live2D runtime, and trademarks remain subject to their own terms.

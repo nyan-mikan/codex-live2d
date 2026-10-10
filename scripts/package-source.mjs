@@ -1,0 +1,13 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import {fileURLToPath} from 'node:url';
+import {execFile} from 'node:child_process';
+import {promisify} from 'node:util';
+const execute=promisify(execFile),root=path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+const {stdout}=await execute('git',['ls-tree','-r','--name-only','HEAD'],{cwd:root});
+const blocked=stdout.trim().split('\n').filter(p=>p.startsWith('state/')||p.startsWith('dist/')||p.startsWith('model/')&&p!=='model/README.md'||p==='vendor/live2d.min.js'||p==='LOCAL_INSTALL.md'||/^\.env(?:\.|$)/.test(p));
+if(blocked.length)throw new Error('Refusing to archive local/private files: '+blocked.join(', '));
+await fs.mkdir(path.join(root,'dist'),{recursive:true});
+const archive=path.join(root,'dist/codex-live2d-source.zip');
+await execute('git',['archive','--format=zip','--prefix=codex-live2d/','--output='+archive,'HEAD'],{cwd:root});
+console.log(archive);

@@ -1,0 +1,12 @@
+{
+  "neutral": {},
+  "speechNeutral": {
+    "PARAM_EYE_L_SMILE": 0,
+    "PARAM_EYE_R_SMILE": 0,
+    "PARAM_MOUTH_FORM_Y": 0
+  },
+  "mouthParameter": "PARAM_MOUTH_OPEN_Y",
+  "idleMotionGroup": "idle",
+  "clickMotionGroup": "tap",
+  "expressions": {}
+}
