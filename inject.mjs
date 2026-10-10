@@ -14,7 +14,7 @@ export async function assets() {
   await walk(modelDir);return result;
 }
 export async function payload() {
-  const libraries=await Promise.all(['vendor/pixi.min.js','vendor/unsafe-eval.min.js','vendor/live2d.min.js','vendor/cubism2.min.js','vendor/marked.umd.js','speech-text.js','i18n.js','fish-client.js','model-profile.js','renderer.js'].map(p=>fs.readFile(path.join(root,p),'utf8')));
+  const libraries=await Promise.all(['vendor/pixi.min.js','vendor/unsafe-eval.min.js','vendor/live2d.min.js','vendor/cubism2.min.js','vendor/marked.umd.js','speech-text.js','i18n.js','fish-client.js','model-profile.js','view-state.js','renderer.js'].map(p=>fs.readFile(path.join(root,p),'utf8')));
   return libraries.join('\n;\n')+'\n;globalThis.mountCompanion('+JSON.stringify(await assets())+');';
 }
 if (process.argv[1]===fileURLToPath(import.meta.url)) {
@@ -22,7 +22,7 @@ if (process.argv[1]===fileURLToPath(import.meta.url)) {
   await fs.mkdir(path.join(root,'state'),{recursive:true});
   const stopFile=path.join(root,'state','stop');
   const code=remove||verify?null:await payload();
-  const bridgeCode=remove||verify?null:await fs.readFile(path.join(root,'answer-bridge.js'),'utf8');
+  const bridgeCode=remove||verify?null:(await Promise.all(['view-state.js','page-bridge.js','answer-bridge.js'].map(file=>fs.readFile(path.join(root,file),'utf8')))).join('\n;\n');
   let announced=false, lastError='', noTargets=true;
   const fish=remove||verify?null:new FishHost(),connections=new Map();
   process.on('SIGTERM',()=>process.exit(0));process.on('SIGINT',()=>process.exit(0));
@@ -37,12 +37,12 @@ if (process.argv[1]===fileURLToPath(import.meta.url)) {
         const world=await session.world();
         if(fish&&connection.world!==world){connection.detach?.();connection.detach=await fish.attach(session,world);connection.world=world;await fish.loading;await session.evaluate('globalThis.__codexCompanion?.speechHostReady?.('+JSON.stringify(fish.publicConfig())+');true',world);}
         const health=await session.evaluate('globalThis.__codexCompanion?.closed ? {ready:false,closed:true} : globalThis.__codexCompanion?.health() ?? null',world);
-        if(remove){await session.evaluate('globalThis.__codexCompanion?.destroy();true',world);await session.evaluate('globalThis.__codexCompanionAnswerBridge?.stop();true');console.log('Removed from',target.id);}
+        if(remove){await session.evaluate('globalThis.__codexCompanion?.destroy();true',world);await session.evaluate('globalThis.__codexCompanionAnswerBridge?.stop();globalThis.__codexCompanionPageBridge?.stop();true');console.log('Removed from',target.id);}
         else if(verify){console.log(JSON.stringify({target:target.id,health,answerBridge:await session.evaluate('globalThis.__codexCompanionAnswerBridge?.health() ?? null'),pixels:await session.evaluate('globalThis.__codexCompanion?.pixels() ?? null',world)}));if(!health?.ready)process.exitCode=1;}
         else if(!health||reload||(show&&!health.ready)){if(health)await session.evaluate('globalThis.__codexCompanion?.destroy()',world);const mounted=await session.evaluate(code,world);console.log(JSON.stringify({mounted,target:target.id}));announced=true;}
         else if(show&&health.collapsed){await session.evaluate('globalThis.__codexCompanion.setVisible(true)',world);console.log(JSON.stringify({target:target.id,health:await session.evaluate('globalThis.__codexCompanion.health()',world)}));}
         else if(!watch)console.log(JSON.stringify({target:target.id,health}));
-        if(!remove&&!verify){const bridge=await session.evaluate('globalThis.__codexCompanionAnswerBridge?.health() ?? null');if(!bridge||bridge.stopped)await session.evaluate(bridgeCode);}
+        if(!remove&&!verify){const bridge=await session.evaluate('globalThis.__codexCompanionAnswerBridge?.health() ?? null');const pageBridge=await session.evaluate('globalThis.__codexCompanionPageBridge?.health() ?? null');if(!bridge||bridge.stopped||!pageBridge||pageBridge.stopped)await session.evaluate(bridgeCode);}
         if(health?.ready&&!announced){console.log('Companion watcher connected');announced=true;}
       }catch(error){const message=error.message;if(message!==lastError){console.error(message);lastError=message;}if(!watch)process.exitCode=1;}finally{if(!watch)session?.close();}
     }

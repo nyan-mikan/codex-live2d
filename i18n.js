@@ -1,6 +1,8 @@
 /* Shared UI translations. Model labels and assistant text stay user-authored. */
 (() => {
   const english = {
+  "仅在聊天界面启用": "Enable only in chat",
+  "打开侧边栏、应用设置或非聊天页面时自动隐藏；返回聊天后恢复。": "Hide automatically when the sidebar, app settings, or a non-chat page is open. Show again when you return to chat.",
   "Live2D 角色": "Live2D companion",
   "Live2D 角色 Live2D": "Live2D companion",
   "Live2D 角色动态模型": "Animated Live2D model",

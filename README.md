@@ -9,6 +9,7 @@ This is an independent macOS add-on. It attaches to the running desktop interfac
 ## Features
 
 - Mouse-following eyes and head, click interactions, optional user-configured expressions, and adjustable size and vertical position.
+- Optional **Enable only in chat** setting: hide while the sidebar, app settings, a dialog, or a non-chat page is open, and restore on return. Hidden companions stop speech and synthesis requests.
 - English and Chinese settings, with instant switching and a remembered language preference.
 - Circular settings and speaker buttons; collapsing the model keeps an entry to open it again.
 - New assistant body text is captured incrementally. Thinking, tool output, and commentary are excluded; completed history is skipped.
@@ -88,6 +89,12 @@ A quit confirmation may still require your action. A failed attempt is not repea
 
 After importing assets, `Install.command` combines first launch and recovery-service installation.
 
+## Chat-only visibility
+
+Open the gear and turn on **Enable only in chat**. The preference is off by default and saved locally. Opening the app sidebar, app settings, or another non-chat page hides the companion and its controls, stops playback, and cancels queued synthesis. Close the sidebar and return to chat to show it again. Completed text seen while hidden is skipped; speech resumes for future answers. A model you manually collapsed stays collapsed. The companion’s own settings remain usable.
+
+Page detection reads visible UI structure and routing metadata; it does not read response bodies. Settings and sidebar detection depend on the desktop UI and may need adaptation after updates.
+
 ## Optional model profile
 
 Use `npm run setup -- --profile "/path/to/profile.json"` to configure parameters for your own model. The profile is stored locally as `model/profile.json` and excluded from Git and source archives. Without a profile, the companion offers mouse tracking, motions, speech and a neutral-expression control, with no predefined character expressions. Clicks select available motions rather than fixed indexes.
@@ -139,6 +146,7 @@ Tests mock Fish Audio and do not send paid synthesis requests. `npm run pack:sou
 | --- | --- |
 | `i18n.js` | English/Chinese interface translations and language selection |
 | `renderer.js` | Model rendering, expressions, position and controls |
+| `view-state.js` / `page-bridge.js` | Chat-page, sidebar and settings visibility detection |
 | `answer-bridge.js` | Incremental assistant-body capture |
 | `speech-text.js` | Text cleanup and sentence tracking |
 | `fish-client.js` / `fish-host.mjs` | Speech queue, prefetch, playback and API transport |

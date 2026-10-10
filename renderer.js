@@ -11,7 +11,8 @@ globalThis.mountCompanion = async function mountCompanion(assetMap, options = {}
   const i18n = Live2DI18n.create(saved.language, navigator.languages || [navigator.language]);
   const t = i18n.t;
   const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
-  const state = { language: i18n.language, collapsed: saved.collapsed ?? false, paused: reducedMotion.matches, interactive: saved.interactive ?? true, follow: saved.follow ?? true, size: clamp(saved.size || 350, 220, 460), lower: clamp(saved.lower ?? 30, 0, 140), frames: 0, hidden: false, error: null, talking:false, expression: 'neutral', expressionRemaining: 0, gaze: {x:0,y:0}, renderedFace: {}, bounds: null };
+  const state = { language: i18n.language, chatOnly:saved.chatOnly===true, hiddenReason:null, collapsed: saved.collapsed ?? false, paused: reducedMotion.matches, interactive: saved.interactive ?? true, follow: saved.follow ?? true, size: clamp(saved.size || 350, 220, 460), lower: clamp(saved.lower ?? 30, 0, 140), frames: 0, hidden: false, error: null, talking:false, expression: 'neutral', expressionRemaining: 0, gaze: {x:0,y:0}, renderedFace: {}, bounds: null };
+  let pageState = null;
   const answer = { connected:false, text:'', delta:'', id:null, conversationId:null, completed:true, events:0 };
   const profileAsset=assetMap['profile.json'];
   const profile=Live2DProfile.readProfile(profileAsset?JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(profileAsset.data),ch=>ch.charCodeAt(0)))):{});
@@ -23,6 +24,7 @@ globalThis.mountCompanion = async function mountCompanion(assetMap, options = {}
   document.getElementById('codex-live2d-companion')?.remove();
   const host = document.createElement('aside');
   host.id = 'codex-live2d-companion';
+  host.dataset.live2dCompanion='true';
   host.setAttribute('aria-label', t('Live2D 角色 Live2D'));
   host.style.cssText = 'position:fixed;left:auto;top:auto;right:12px;bottom:0;width:auto;height:auto;margin:0;padding:0;background:transparent;z-index:90;pointer-events:none;contain:layout style;';
   const shadow = host.attachShadow({ mode: 'open' });
@@ -58,6 +60,8 @@ globalThis.mountCompanion = async function mountCompanion(assetMap, options = {}
   panel.innerHTML = `
     <strong data-i18n="Live2D 角色"></strong>
     <label><span data-i18n="语言"></span><select data-setting="language"><option value="en" lang="en">English</option><option value="zh-CN" lang="zh-CN">中文</option></select></label>
+    <label class="voice-check"><input type="checkbox" data-setting="chat-only"><span data-i18n="仅在聊天界面启用"></span></label>
+    <p class="voice-help" data-i18n="打开侧边栏、应用设置或非聊天页面时自动隐藏；返回聊天后恢复。"></p>
     <p class="status" role="status" data-i18n="正在加载模型…"></p>
     <div class="row"><button data-action="pause"></button><button data-action="follow"></button><button data-action="interaction"></button></div>
     <div class="row" data-expression-row data-i18n-aria="表情"><button data-expression="neutral" data-i18n="自然"></button></div>
@@ -90,7 +94,8 @@ globalThis.mountCompanion = async function mountCompanion(assetMap, options = {}
   const slider = panel.querySelector('[data-setting="size"]'); slider.value = String(state.size);
   const lowerSlider = panel.querySelector('[data-setting="lower"]'); lowerSlider.value = String(state.lower);
   const listen = (target, event, fn, extra = {}) => target.addEventListener(event, fn, { ...extra, signal: abort.signal });
-  const persist = () => { try { localStorage.setItem('codex-live2d-display-v1', JSON.stringify({language:state.language, collapsed:state.collapsed, size: state.size, lower:state.lower, follow:state.follow, interactive:state.interactive})); } catch {} };
+  const persist = () => { try { localStorage.setItem('codex-live2d-display-v1', JSON.stringify({language:state.language, chatOnly:state.chatOnly, collapsed:state.collapsed, size: state.size, lower:state.lower, follow:state.follow, interactive:state.interactive})); } catch {} };
+  const chatOnlyInput=panel.querySelector('[data-setting=chat-only]');chatOnlyInput.checked=state.chatOnly;
   const languageSelect = panel.querySelector('[data-setting=language]');
   const voiceForm=voice.querySelector('form'),voiceStatus=voice.querySelector('.voice-status');
   const field=name=>voiceForm.elements.namedItem(name);
@@ -253,15 +258,20 @@ globalThis.mountCompanion = async function mountCompanion(assetMap, options = {}
   function checkOcclusion() {
     if (disposed) return;
     const wasHidden=state.hidden;
-    state.hidden = !!document.querySelector('[role="dialog"][aria-modal="true"],dialog[open]');
+    const current=Live2DView.read();
+    const view=pageState?{...current,chat:pageState.chat,settingsOpen:pageState.settingsOpen||current.settingsOpen}:current;
+    const decision=Live2DView.decide(view,state.chatOnly);
+    state.hidden=decision.hidden;state.hiddenReason=decision.reason;
     if(state.hidden&&!wasHidden)speechController?.stop();
-    host.style.visibility = state.hidden ? 'hidden' : 'visible';
+    const visibility=state.hidden?'hidden':'visible';
+    if(host.style.visibility!==visibility)host.style.visibility=visibility;
     refreshRunning();
   }
   function destroy() {
     if (disposed) return;
     disposed = true; api.closed = true;
     document.dispatchEvent(new CustomEvent('codex-live2d-answer-control',{detail:JSON.stringify({action:'stop'})}));
+    document.dispatchEvent(new CustomEvent('codex-live2d-page-control',{detail:'stop'}));
     speechController?.dispose();
     abort.abort(); observer?.disconnect(); resizeObserver?.disconnect();
     if (app) { app.stop(); app.destroy(true, { children:true, texture:true, baseTexture:true }); }
@@ -270,7 +280,7 @@ globalThis.mountCompanion = async function mountCompanion(assetMap, options = {}
   }
   const api = globalThis.__codexCompanion = {
     closed:false, host, state,
-    health() { return { version:10, language:state.language, talking:state.talking, effectiveExpression:state.talking?'neutral':state.expression, voice:speechController.health(), answer:{connected:answer.connected,characters:answer.text.length,deltaCharacters:answer.delta.length,events:answer.events,completed:answer.completed,visible:false}, collapsed:state.collapsed, ready:!!model && !disposed, closed:disposed, frames:state.frames, paused:state.paused, hidden:state.hidden, interactive:state.interactive, follow:state.follow, expression:state.expression, lower:state.lower, gaze:{target:state.gaze,current:model&&!disposed?{x:model.internalModel.focusController.x,y:model.internalModel.focusController.y}:null}, renderedFace:state.renderedFace, bounds:state.bounds, viewport:[innerWidth,innerHeight], size:[canvas.clientWidth,canvas.clientHeight], webglLost:!!app?.renderer?.gl?.isContextLost(), error:state.error, motions:model && !disposed ? Object.fromEntries(Object.entries(model.internalModel.motionManager.definitions).map(([k,v])=>[k,v.length])) : null }; },
+    health() { return { version:11, chatOnly:state.chatOnly, hiddenReason:state.hiddenReason, language:state.language, talking:state.talking, effectiveExpression:state.talking?'neutral':state.expression, voice:speechController.health(), answer:{connected:answer.connected,characters:answer.text.length,deltaCharacters:answer.delta.length,events:answer.events,completed:answer.completed,visible:false}, collapsed:state.collapsed, ready:!!model && !disposed, closed:disposed, frames:state.frames, paused:state.paused, hidden:state.hidden, interactive:state.interactive, follow:state.follow, expression:state.expression, lower:state.lower, gaze:{target:state.gaze,current:model&&!disposed?{x:model.internalModel.focusController.x,y:model.internalModel.focusController.y}:null}, renderedFace:state.renderedFace, bounds:state.bounds, viewport:[innerWidth,innerHeight], size:[canvas.clientWidth,canvas.clientHeight], webglLost:!!app?.renderer?.gl?.isContextLost(), error:state.error, motions:model && !disposed ? Object.fromEntries(Object.entries(model.internalModel.motionManager.definitions).map(([k,v])=>[k,v.length])) : null }; },
     pixels() {
       if (!app || !model || disposed) return null;
       app.render(); const gl=app.renderer.gl, w=app.renderer.width,h=app.renderer.height;
@@ -297,6 +307,7 @@ globalThis.mountCompanion = async function mountCompanion(assetMap, options = {}
     receiveAnswer,
     speechHostReady:config=>speechController.hostReady(config),
     setLanguage,
+    setChatOnly(value) { state.chatOnly=!!value;chatOnlyInput.checked=state.chatOnly;persist();checkOcclusion(); },
     setSpeechEnabled:value=>speechController.enable(!!value),
     focusAt,
     setFollow(value) { state.follow=!!value;persist();refreshInteraction(); },
@@ -318,7 +329,14 @@ globalThis.mountCompanion = async function mountCompanion(assetMap, options = {}
     destroy
   };
   listen(document,'codex-live2d-answer',event=>{if(typeof event.detail==='string'){try{receiveAnswer(JSON.parse(event.detail));}catch{}}});
-  listen(badge,'click',()=>{if(speechController.config().enabled)void speechController.unlock();if(state.collapsed)api.setVisible(true);panel.hidden=!panel.hidden;badge.setAttribute('aria-expanded',String(!panel.hidden));});
+  listen(chatOnlyInput,'change',()=>api.setChatOnly(chatOnlyInput.checked));
+  listen(chatOnlyInput,'keydown',event=>{if(event.key!=='Escape')event.stopPropagation();});
+  listen(document,'codex-live2d-page-state',event=>{
+    try{const value=JSON.parse(event.detail);if(!['chat','sidebarOpen','settingsOpen','modalOpen'].every(key=>typeof value[key]==='boolean'))return;pageState=value;checkOcclusion();}catch{}
+  });
+  document.dispatchEvent(new CustomEvent('codex-live2d-page-control',{detail:'refresh'}));
+  checkOcclusion();
+  listen(badge,'click' ,()=>{if(speechController.config().enabled)void speechController.unlock();if(state.collapsed)api.setVisible(true);panel.hidden=!panel.hidden;badge.setAttribute('aria-expanded',String(!panel.hidden));});
   listen(speaker,'click',async()=>{if(speaker.disabled)return;const value=!speechController.config().enabled;if(value&&!speechController.config().configured){panel.hidden=false;voice.open=true;badge.setAttribute('aria-expanded','true');field('apiKey').focus();}await speechController.enable(value);});
   listen(shadow,'click',async event=>{
     const expression=event.target.closest?.('[data-expression]')?.dataset.expression;
@@ -363,8 +381,8 @@ globalThis.mountCompanion = async function mountCompanion(assetMap, options = {}
     app.renderer.on('postrender',()=>state.frames++);
     model.update(16);app.render();layout();
     listen(window,'resize',layout,{passive:true});
-    observer=new MutationObserver(()=>{if(!host.isConnected&&!disposed)document.body.append(host);checkOcclusion();});
-    observer.observe(document.body,{childList:true,subtree:true,attributes:true,attributeFilter:['aria-modal','open']});
+    observer=new MutationObserver(records=>{if(!host.isConnected&&!disposed)document.body.append(host);if(records.some(record=>record.target!==host))checkOcclusion();});
+    observer.observe(document.body,{childList:true,subtree:true,attributes:true,attributeFilter:['aria-modal','open','aria-expanded','aria-hidden','hidden','inert','data-state','data-slate-sidebar-peeking','class','style']});
     refreshExpression();
     host.dataset.ready='true';api.setVisible(!state.collapsed);checkOcclusion();
     console.info('[Codex Companion] mounted',api.health());
