@@ -2,7 +2,7 @@
 (() => {
   const english = {
   "仅在聊天界面启用": "Enable only in chat",
-  "打开临时侧栏、应用设置或非聊天页面时自动隐藏；常驻聊天列表不影响显示。": "Hide when a temporary sidebar, app settings, or a non-chat page is open. The docked chat list does not hide the model.",
+  "打开右侧工作面板、临时侧栏、应用设置或非聊天页面时自动隐藏；常驻聊天列表不影响显示。": "Hide when a right workspace panel, temporary sidebar, app settings, or a non-chat page is open. The docked chat list does not hide the model.",
   "Live2D 角色": "Live2D companion",
   "Live2D 角色 Live2D": "Live2D companion",
   "Live2D 角色动态模型": "Animated Live2D model",

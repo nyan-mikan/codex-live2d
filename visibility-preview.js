@@ -20,7 +20,7 @@
     toggle.addEventListener('click',()=>setSidebar(toggle.getAttribute('aria-expanded')!=='true'));
     document.querySelector('#run').addEventListener('click',async()=>{
       try{
-        const api=__codexCompanion,checks=[];
+        const api=__codexCompanion,checks=[],workspace=document.querySelector('#workspace');
         api.setChatOnly(false);setSidebar(true);await wait(300);check(!api.health().hidden,'Off should preserve normal sidebar behavior');checks.push('off-preserves-sidebar');
         api.setChatOnly(true);await until(()=>api.health().hiddenReason==='sidebar');checks.push('sidebar-hides');
         document.body.setAttribute('data-app-shell-responsive-sidebar','false');await until(()=>!api.health().hidden);checks.push('docked-chat-list-remains-visible');
@@ -28,6 +28,8 @@
         document.body.setAttribute('data-app-shell-docking-peek','false');await until(()=>!api.health().hidden);
         document.body.setAttribute('data-app-shell-responsive-sidebar','true');await until(()=>api.health().hiddenReason==='sidebar');checks.push('responsive-sidebar-restores-hiding');
         setSidebar(false);await until(()=>!api.health().hidden);checks.push('sidebar-close-restores');
+        workspace.hidden=false;await until(()=>api.health().hiddenReason==='sidebar');checks.push('right-workspace-hides');
+        workspace.hidden=true;await until(()=>!api.health().hidden);checks.push('right-workspace-close-restores');
         route.pathname='/settings/personalization';await until(()=>api.health().hiddenReason==='settings');checks.push('memory-route-settings-hides');
         route.pathname='/plugins';await until(()=>api.health().hiddenReason==='non-chat');checks.push('other-pages-hide');
         route.pathname='/local/visibility-test';await until(()=>!api.health().hidden);checks.push('chat-restores');

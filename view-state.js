@@ -43,15 +43,20 @@
     const chatMarkers = '[data-thread-find-target="conversation"],[data-chatgpt-selection-conversation-id],[data-local-conversation-final-assistant],[data-composer-body],[contenteditable="true"][role="textbox"],#prompt-textarea';
     const chat = route ?? !!Array.from((main || doc).querySelectorAll(chatMarkers)).find(isVisible);
     // A docked conversation list is part of the chat layout, not a blocking overlay.
-    // Only the responsive sidebar and temporary docking peeks hide the companion.
+    // Responsive navigation overlays, docking peeks and workspace panels hide it.
     const responsive = visibleAll('[data-app-shell-responsive-sidebar="true"]').length > 0;
     const triggers = visibleAll('[aria-controls="app-shell-sidebar"][aria-expanded]');
     const expanded = triggers.length ? triggers.some(element => element.getAttribute('aria-expanded') === 'true') : visibleAll('#app-shell-sidebar,[data-sidebar="sidebar"]').some(element => element.getAttribute('data-state') !== 'collapsed');
     const sidebarOpen = responsive && expanded;
     const peeking = visibleAll('[data-slate-sidebar-peeking="true"],[data-app-shell-docking-peek="true"]').length > 0;
+    // Inspect the content panel, not titlebar controls bearing the same focus-area attribute.
+    const workspaceOpen = visibleAll('aside[data-app-shell-focus-area="right-panel"]').some(element => {
+      const rect = element.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0;
+    });
     const settingsOpen = /(?:^|\/)settings(?:\/|$)/.test(path) || visibleAll('[data-testid="settings-dialog"],[data-testid="settings-page"]').length > 0;
     const modalOpen = visibleAll('[role="dialog"][aria-modal="true"],dialog[open]').length > 0;
-    return {chat: !!chat, sidebarOpen: sidebarOpen || peeking, settingsOpen, modalOpen};
+    return {chat: !!chat, sidebarOpen: sidebarOpen || peeking || workspaceOpen, settingsOpen, modalOpen};
   }
   globalThis.Live2DView = {read, decide, chatRoute, isVisible};
 })();

@@ -9,7 +9,7 @@ This is an independent macOS add-on. It attaches to the running desktop interfac
 ## Features
 
 - Mouse-following eyes and head, click interactions, optional user-configured expressions, and adjustable size and vertical position.
-- Optional **Enable only in chat** setting: hide while a temporary sidebar, app settings, a dialog, or a non-chat page is open, and restore on return. Hidden companions stop speech and synthesis requests.
+- Optional **Enable only in chat** setting: hide while a right workspace panel, a temporary sidebar, app settings, a dialog, or a non-chat page is open, and restore on return. Hidden companions stop speech and synthesis requests.
 - English and Chinese settings, with instant switching and a remembered language preference.
 - Circular settings and speaker buttons; collapsing the model keeps an entry to open it again.
 - New assistant body text is captured incrementally. Thinking, tool output, and commentary are excluded; completed history is skipped.
@@ -91,7 +91,7 @@ After importing assets, `Install.command` combines first launch and recovery-ser
 
 ## Chat-only visibility
 
-Open the gear and turn on **Enable only in chat**. The preference is off by default and saved locally. The docked chat list does not hide the companion. Opening a temporary sidebar overlay, app settings, or another non-chat page hides the companion and its controls, stops playback, and cancels queued synthesis. Close the overlay and return to chat to show it again. Completed text seen while hidden is skipped; speech resumes for future answers. A model you manually collapsed stays collapsed. The companion’s own settings remain usable.
+Open the gear and turn on **Enable only in chat**. The preference is off by default and saved locally. The docked chat list does not hide the companion. Opening a right workspace panel (browser, file, terminal, or review), a temporary sidebar overlay, app settings, or another non-chat page hides the companion and its controls, stops playback, and cancels queued synthesis. Close the panel or overlay and return to chat to show it again. Completed text seen while hidden is skipped; speech resumes for future answers. A model you manually collapsed stays collapsed. The companion’s own settings remain usable.
 
 Page detection reads visible UI structure and routing metadata; it does not read response bodies. Settings and sidebar detection depend on the desktop UI and may need adaptation after updates.
 

@@ -61,7 +61,7 @@ globalThis.mountCompanion = async function mountCompanion(assetMap, options = {}
     <strong data-i18n="Live2D 角色"></strong>
     <label><span data-i18n="语言"></span><select data-setting="language"><option value="en" lang="en">English</option><option value="zh-CN" lang="zh-CN">中文</option></select></label>
     <label class="voice-check"><input type="checkbox" data-setting="chat-only"><span data-i18n="仅在聊天界面启用"></span></label>
-    <p class="voice-help" data-i18n="打开临时侧栏、应用设置或非聊天页面时自动隐藏；常驻聊天列表不影响显示。"></p>
+    <p class="voice-help" data-i18n="打开右侧工作面板、临时侧栏、应用设置或非聊天页面时自动隐藏；常驻聊天列表不影响显示。"></p>
     <p class="status" role="status" data-i18n="正在加载模型…"></p>
     <div class="row"><button data-action="pause"></button><button data-action="follow"></button><button data-action="interaction"></button></div>
     <div class="row" data-expression-row data-i18n-aria="表情"><button data-expression="neutral" data-i18n="自然"></button></div>

@@ -27,12 +27,18 @@ test('Pre-mounted invisible dialogs, offscreen hidden controls and the companion
 });
 
 // Model the desktop's visible layout, including an expanded navigation toggle.
-function desktopView({responsive=false,expanded=true,peek=false,sidebarVisible=true}={}){
+function desktopView({responsive=false,expanded=true,peek=false,sidebarVisible=true,workspace=null}={}){
   const doc={defaultView:{location:{pathname:'/index.html'},getComputedStyle:()=>({display:'block',visibility:'visible'})}};
   const element=(attrs={})=>({ownerDocument:doc,closest:()=>null,getClientRects:()=>[{}],getAttribute:key=>attrs[key]??null,matches:selector=>selector==='[data-app-shell-main-surface]',querySelectorAll:()=>[]});
   const main=element();main.__reactFiber$fixture={memoizedProps:{value:{location:{pathname:'/local/current-chat'}}},return:null};
   const trigger=element({'aria-expanded':String(expanded)}),sidebar=element(),shell=element();
   doc.querySelectorAll=selector=>{
+    if(selector==='aside[data-app-shell-focus-area="right-panel"]'){
+      if(!workspace)return [];
+      const panel=element();panel.closest=()=>workspace.hidden?{}:null;
+      panel.getBoundingClientRect=()=>({width:workspace.width??700,height:workspace.height??800});
+      return [panel];
+    }
     if(selector==='main,[data-app-shell-main-surface]')return [main];
     if(selector==='[data-app-shell-responsive-sidebar="true"]')return responsive?[shell]:[];
     if(selector==='[aria-controls="app-shell-sidebar"][aria-expanded]')return [trigger];
@@ -56,4 +62,17 @@ test('Responsive sidebar overlays hide, then restore when closed or docked',()=>
 test('Temporary docking peeks hide without requiring a responsive layout',()=>{
   assert.deepEqual(decide(desktopView({peek:true,expanded:false}),true),{hidden:true,reason:'sidebar'});
   assert.equal(decide(desktopView({peek:false,expanded:false}),true).hidden,false);
+});
+
+test('The right browser/file/terminal workspace hides the model even in a chat route',()=>{
+  const view=desktopView({workspace:{}});
+  assert.equal(view.chat,true);
+  assert.deepEqual(decide(view,true),{hidden:true,reason:'sidebar'});
+  assert.equal(decide(view,false).hidden,false);
+  assert.equal(decide(desktopView(),true).hidden,false);
+});
+test('Closed, hidden or zero-sized workspace panels do not hide the chat model',()=>{
+  for(const workspace of [null,{hidden:true},{width:0},{height:0}]){
+    assert.equal(decide(desktopView({workspace}),true).hidden,false);
+  }
 });
