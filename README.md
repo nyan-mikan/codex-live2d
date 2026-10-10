@@ -9,6 +9,7 @@ This is an independent macOS add-on. It attaches to the running desktop interfac
 ## Features
 
 - Mouse-following eyes and head, click interactions, optional user-configured expressions, and adjustable size and vertical position.
+- English and Chinese settings, with instant switching and a remembered language preference.
 - Circular settings and speaker buttons; collapsing the model keeps an entry to open it again.
 - New assistant body text is captured incrementally. Thinking, tool output, and commentary are excluded; completed history is skipped.
 - Optional Fish Audio speech, one sentence per request, with the next three sentences prefetched and decoded during playback.
@@ -66,7 +67,7 @@ npm start
 
 Starting may normally quit and reopen Codex to enable the local debug endpoint at `127.0.0.1:19335` (or local IPv6). Finish active work first. If macOS asks for permission to control the app, allow it; if Codex asks whether to quit, confirm it. The launcher waits for normal exit and never force-kills the app.
 
-You can also double-click `Start.command`. The gear button opens settings; the speaker button toggles speech.
+You can also double-click `Start.command`. The gear button opens settings; the speaker button toggles speech. Choose **Language → English / 中文** at the top of settings. The first launch follows your system language (Chinese for `zh`, English otherwise); your selection is saved locally and survives reloads. Switching language preserves unsaved form fields and ongoing speech. Assistant text and custom expression labels are kept in their original language.
 
 For a nonstandard application location, set this before starting and installing recovery:
 
@@ -95,17 +96,17 @@ See [the generic example](docs/model-profile.example.json). `neutral` and `speec
 
 ## Fish Audio settings
 
-Open the gear → **语音设置 · Fish Audio** and enter:
+Open the gear → **Speech settings · Fish Audio** and enter:
 
 | Setting | Meaning |
 | --- | --- |
 | `FISH_API_KEY` | Your Fish Audio API key; entered in the password field |
 | `reference_id` | The voice identifier |
 | Model | The Fish speech model name, entered manually |
-| 自动朗读新正文 | Enable speech for new assistant body text |
-| 记住 API Key | Optional plaintext storage on this computer |
+| Read new responses aloud | Enable speech for new assistant body text |
+| Remember API key | Optional plaintext storage on this computer |
 
-The default model name is `s2.1-pro-free`; availability depends on your account. Refer to the [Fish Audio API documentation](https://docs.fish.audio/api-reference/endpoint/openapi-v1/text-to-speech) for current names. Save your settings, then use **试听** to try the voice.
+The default model name is `s2.1-pro-free`; availability depends on your account. Refer to the [Fish Audio API documentation](https://docs.fish.audio/api-reference/endpoint/openapi-v1/text-to-speech) for current names. Save your settings, then use **Test voice** to try the voice.
 
 The key stays in the watcher process by default. If you select “remember,” it is saved in `state/fish-config.json` with owner-only file permissions. That directory is ignored by Git and source packaging. Without remembering, enter the key again after restarting the watcher.
 
@@ -136,6 +137,7 @@ Tests mock Fish Audio and do not send paid synthesis requests. `npm run pack:sou
 
 | File | Responsibility |
 | --- | --- |
+| `i18n.js` | English/Chinese interface translations and language selection |
 | `renderer.js` | Model rendering, expressions, position and controls |
 | `answer-bridge.js` | Incremental assistant-body capture |
 | `speech-text.js` | Text cleanup and sentence tracking |
@@ -152,7 +154,7 @@ Tests mock Fish Audio and do not send paid synthesis requests. `npm run pack:sou
 - **Model closed:** reopen it from the gear entry; to restore a fully removed companion, run `npm start`.
 - **Work/Chat views:** the bridge includes adapters for Codex, ChatGPT Work and ChatGPT Chat data. They depend on internal page metadata; verify your installed build. Automatic compatibility across future updates is not guaranteed.
 
-The original attachment was exercised on desktop builds 26.1002.52244 and 26.1007.21159. This is not an official extension API, and UI updates may require adapter changes. Windows and Linux desktop activation are not implemented. Settings UI currently uses Chinese labels.
+The original attachment was exercised on desktop builds 26.1002.52244 and 26.1007.21159. This is not an official extension API, and UI updates may require adapter changes. Windows and Linux desktop activation are not implemented. Settings support English and Simplified Chinese.
 
 ## License
 

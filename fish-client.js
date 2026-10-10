@@ -44,14 +44,14 @@
       dispose(){stop();void context?.close();}
     };
   }
-  function createController({transport=nativeTransport(),player=audioPlayer(),onChange=()=>{},onConfig=()=>{}}={}){
+  function createController({transport=nativeTransport(),player=audioPlayer(),onChange=()=>{},onConfig=()=>{},t=value=>value}={}){
     const tracker=new CompanionSpeechText.SentenceTracker();
     let config={enabled:false,configured:false,hasKey:false,rememberKey:false,referenceId:'',model:'s2.1-pro-free'},lastMessage=null,queue=[],slots=[],producer=null,current=null,epoch=0,disposed=false,mutedKey=null,failed=false,saving=false;
     // Keep at most three future sentences in memory, including the in-flight request.
     const prefetchLimit=3;
     const stats={submitted:0,played:0,phase:'loading',message:'正在连接 Fish Audio 设置…',speaking:false};
     const keyOf=m=>m?m.conversationId+':'+m.id:null;
-    const health=()=>({...stats,enabled:config.enabled,configured:config.configured,hasKey:config.hasKey,pending:queue.length+slots.length,cached:slots.filter(j=>j.ready).length,preparing:producer?1:0,prefetchLimit,audioReady:player.ready()});
+    const health=()=>({...stats,message:t(stats.message),enabled:config.enabled,configured:config.configured,hasKey:config.hasKey,pending:queue.length+slots.length,cached:slots.filter(j=>j.ready).length,preparing:producer?1:0,prefetchLimit,audioReady:player.ready()});
     const notify=(phase,message)=>{stats.phase=phase;stats.message=message;onChange(health());};
     function cancel(skipCurrent=false,silent=false){
       epoch++;queue=[];
@@ -106,6 +106,7 @@
       refreshProgress();
     }
     const controller={
+      refreshLanguage:()=>onChange(health()),
       health,config:()=>({...config}),mouth:()=>stats.speaking?player.mouth():0,
       async init(){try{acceptConfig(await transport('config'));}catch(e){notify('error',e.message);}return health();},
       hostReady:acceptConfig,
@@ -138,7 +139,7 @@
         if(!config.enabled||saving){notify('idle','朗读已关闭，请先启用朗读。');return;}
         cancel(true);failed=false;await controller.unlock();
         if(!config.configured){notify('error','请先保存 API Key、reference_id 和语音模型。');return;}
-        queue.push('你好，这是语音测试。');void drain();
+        queue.push(t('你好，这是语音测试。'));void drain();
       },
       stop(){cancel(true);},
       dispose(){if(disposed)return;disposed=true;cancel();transport.dispose?.();player.dispose();}

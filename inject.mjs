@@ -14,7 +14,7 @@ export async function assets() {
   await walk(modelDir);return result;
 }
 export async function payload() {
-  const libraries=await Promise.all(['vendor/pixi.min.js','vendor/unsafe-eval.min.js','vendor/live2d.min.js','vendor/cubism2.min.js','vendor/marked.umd.js','speech-text.js','fish-client.js','model-profile.js','renderer.js'].map(p=>fs.readFile(path.join(root,p),'utf8')));
+  const libraries=await Promise.all(['vendor/pixi.min.js','vendor/unsafe-eval.min.js','vendor/live2d.min.js','vendor/cubism2.min.js','vendor/marked.umd.js','speech-text.js','i18n.js','fish-client.js','model-profile.js','renderer.js'].map(p=>fs.readFile(path.join(root,p),'utf8')));
   return libraries.join('\n;\n')+'\n;globalThis.mountCompanion('+JSON.stringify(await assets())+');';
 }
 if (process.argv[1]===fileURLToPath(import.meta.url)) {
