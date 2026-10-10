@@ -28,7 +28,7 @@
     if(records.every(record=>record.target.nodeType===1&&record.target.closest('[data-live2d-companion]')))return;
     if(scheduled===null)scheduled=requestAnimationFrame(()=>{scheduled=null;scan();});
   });
-  observer.observe(document.body,{childList:true,subtree:true,attributes:true,attributeFilter:['hidden','aria-hidden','aria-expanded','aria-modal','open','inert','class','style','data-state','data-slate-sidebar-peeking']});
+  observer.observe(document.body,{childList:true,subtree:true,attributes:true,attributeFilter:['hidden','aria-hidden','aria-expanded','aria-modal','open','inert','class','style','data-state','data-slate-sidebar-peeking','data-app-shell-responsive-sidebar','data-app-shell-docking-peek']});
   document.addEventListener('codex-live2d-page-control', control);
   window.addEventListener('popstate', refresh);
   window.addEventListener('hashchange', refresh);

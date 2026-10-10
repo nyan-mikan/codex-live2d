@@ -23,6 +23,10 @@
         const api=__codexCompanion,checks=[];
         api.setChatOnly(false);setSidebar(true);await wait(300);check(!api.health().hidden,'Off should preserve normal sidebar behavior');checks.push('off-preserves-sidebar');
         api.setChatOnly(true);await until(()=>api.health().hiddenReason==='sidebar');checks.push('sidebar-hides');
+        document.body.setAttribute('data-app-shell-responsive-sidebar','false');await until(()=>!api.health().hidden);checks.push('docked-chat-list-remains-visible');
+        document.body.setAttribute('data-app-shell-docking-peek','true');await until(()=>api.health().hiddenReason==='sidebar');checks.push('temporary-docking-peek-hides');
+        document.body.setAttribute('data-app-shell-docking-peek','false');await until(()=>!api.health().hidden);
+        document.body.setAttribute('data-app-shell-responsive-sidebar','true');await until(()=>api.health().hiddenReason==='sidebar');checks.push('responsive-sidebar-restores-hiding');
         setSidebar(false);await until(()=>!api.health().hidden);checks.push('sidebar-close-restores');
         route.pathname='/settings/personalization';await until(()=>api.health().hiddenReason==='settings');checks.push('memory-route-settings-hides');
         route.pathname='/plugins';await until(()=>api.health().hiddenReason==='non-chat');checks.push('other-pages-hide');

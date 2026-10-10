@@ -42,10 +42,13 @@
     const route = chatRoute(path);
     const chatMarkers = '[data-thread-find-target="conversation"],[data-chatgpt-selection-conversation-id],[data-local-conversation-final-assistant],[data-composer-body],[contenteditable="true"][role="textbox"],#prompt-textarea';
     const chat = route ?? !!Array.from((main || doc).querySelectorAll(chatMarkers)).find(isVisible);
-    // The rail alone is not an open sidebar. Prefer the app's explicit expanded toggle.
+    // A docked conversation list is part of the chat layout, not a blocking overlay.
+    // Only the responsive sidebar and temporary docking peeks hide the companion.
+    const responsive = visibleAll('[data-app-shell-responsive-sidebar="true"]').length > 0;
     const triggers = visibleAll('[aria-controls="app-shell-sidebar"][aria-expanded]');
-    const sidebarOpen = triggers.length ? triggers.some(element => element.getAttribute('aria-expanded') === 'true') : visibleAll('#app-shell-sidebar,[data-sidebar="sidebar"]').some(element => element.getAttribute('data-state') !== 'collapsed');
-    const peeking = visibleAll('[data-slate-sidebar-peeking="true"]').length > 0;
+    const expanded = triggers.length ? triggers.some(element => element.getAttribute('aria-expanded') === 'true') : visibleAll('#app-shell-sidebar,[data-sidebar="sidebar"]').some(element => element.getAttribute('data-state') !== 'collapsed');
+    const sidebarOpen = responsive && expanded;
+    const peeking = visibleAll('[data-slate-sidebar-peeking="true"],[data-app-shell-docking-peek="true"]').length > 0;
     const settingsOpen = /(?:^|\/)settings(?:\/|$)/.test(path) || visibleAll('[data-testid="settings-dialog"],[data-testid="settings-page"]').length > 0;
     const modalOpen = visibleAll('[role="dialog"][aria-modal="true"],dialog[open]').length > 0;
     return {chat: !!chat, sidebarOpen: sidebarOpen || peeking, settingsOpen, modalOpen};

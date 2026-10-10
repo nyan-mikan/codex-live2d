@@ -25,3 +25,35 @@ test('Pre-mounted invisible dialogs, offscreen hidden controls and the companion
   assert.equal(isVisible(element()),true);
   for(const options of [{hidden:true},{rects:0},{visibility:'hidden'},{visibility:'collapse'},{display:'none'}])assert.equal(isVisible(element(options)),false);
 });
+
+// Model the desktop's visible layout, including an expanded navigation toggle.
+function desktopView({responsive=false,expanded=true,peek=false,sidebarVisible=true}={}){
+  const doc={defaultView:{location:{pathname:'/index.html'},getComputedStyle:()=>({display:'block',visibility:'visible'})}};
+  const element=(attrs={})=>({ownerDocument:doc,closest:()=>null,getClientRects:()=>[{}],getAttribute:key=>attrs[key]??null,matches:selector=>selector==='[data-app-shell-main-surface]',querySelectorAll:()=>[]});
+  const main=element();main.__reactFiber$fixture={memoizedProps:{value:{location:{pathname:'/local/current-chat'}}},return:null};
+  const trigger=element({'aria-expanded':String(expanded)}),sidebar=element(),shell=element();
+  doc.querySelectorAll=selector=>{
+    if(selector==='main,[data-app-shell-main-surface]')return [main];
+    if(selector==='[data-app-shell-responsive-sidebar="true"]')return responsive?[shell]:[];
+    if(selector==='[aria-controls="app-shell-sidebar"][aria-expanded]')return [trigger];
+    if(selector==='#app-shell-sidebar,[data-sidebar="sidebar"]')return sidebarVisible?[sidebar]:[];
+    if(selector==='[data-slate-sidebar-peeking="true"],[data-app-shell-docking-peek="true"]')return peek?[shell]:[];
+    return [];
+  };
+  return Live2DView.read(doc);
+}
+test('An expanded docked chat list must not hide a real chat',()=>{
+  const view=desktopView();
+  assert.equal(view.chat,true);
+  assert.equal(view.sidebarOpen,false);
+  assert.deepEqual(decide(view,true),{hidden:false,reason:null});
+});
+test('Responsive sidebar overlays hide, then restore when closed or docked',()=>{
+  assert.deepEqual(decide(desktopView({responsive:true}),true),{hidden:true,reason:'sidebar'});
+  assert.equal(decide(desktopView({responsive:true,expanded:false,sidebarVisible:false}),true).hidden,false);
+  assert.equal(decide(desktopView({responsive:false}),true).hidden,false);
+});
+test('Temporary docking peeks hide without requiring a responsive layout',()=>{
+  assert.deepEqual(decide(desktopView({peek:true,expanded:false}),true),{hidden:true,reason:'sidebar'});
+  assert.equal(decide(desktopView({peek:false,expanded:false}),true).hidden,false);
+});
