@@ -17,12 +17,12 @@
 - 朗读时使用自然表情，嘴部随声音变化。
 - 朗读前清理 Markdown、emoji、引用标记和 `www` 等笑声；保留网址中的 `www`。
 - 关闭扬声器立即停止播放、取消请求和清空缓存，再开启只读之后的新文字。
-- 自动复用官方 Codex 主进程声明的本机连接，包括 Codex++ 使用的其他端口，项目保持独立。
-- 轻量 Dock 启动器首次就带参数打开官方应用；后台只修复模型，不自动退出 Codex。
+- 自动复用正在运行的官方应用声明的本机连接，不限端口，不依赖其他增强工具。
+- 照常从 Dock、Finder、Spotlight 或链接打开原 Codex；缺少模型入口时，后台在启动后正常重启一次并挂载。
 
 ## 环境要求
 
-- macOS，Node.js **22 或更新版本**，以及编译本机启动器所需的 Apple Command Line Tools（`xcode-select --install`）；Node.js 自带 npm。
+- macOS、Node.js **22 或更新版本**，Node.js 自带 npm。仅可选启动器需要 Apple Command Line Tools。
 - Codex 桌面应用，自动检测 `/Applications/ChatGPT.app` 和 `/Applications/Codex.app`。
 - 你自行提供的 **Cubism 2.1** 模型：`.model.json`、`.moc`、贴图和相关资源。
 - 自行提供兼容的 Cubism 2.1 `live2d.min.js` runtime。
@@ -67,13 +67,13 @@ npm run doctor
 npm run install:desktop
 ```
 
-安装会创建 `~/Applications/Codex Live2D.app`，使用本机 Codex 的图标。把这个启动器拖到 Dock，并移除原来的 Codex 固定项。它第一次就带模型参数打开真正的 Codex，不会先退出再重开，也不会打开终端窗口。Codex 已运行时，点击只唤起窗口，不重启模型进程或打断朗读。启动器保存在应用之外，官方应用更新不会覆盖它。
+安装会注册用户后台服务，保留原来的 Codex Dock 图标。照常从 Dock、Finder、Spotlight 或链接打开官方应用；缺少模型连接约十秒后，后台正常退出并带本机连接参数重新打开一次，然后挂载模型。官方应用包和签名保持原样。
 
-导入资源后，也可以双击 `Install.command`。如果 Codex 已经以不带模型参数的方式运行，安装会保留当前窗口；请完成工作后自行退出，下次用新启动器打开。`Start.command` / `npm start` 也采用不重启的方式。
+导入资源后，也可以双击 `Install.command`，无需替换 Dock 图标。安装时若当前 Codex 缺少模型连接，后台也会在等待后正常重启一次。macOS 可能要求允许控制 Codex 以完成正常退出；遇到退出确认会等待，不强制终止进程。
 
-如果平时通过 Codex++ 或其他启用 CDP 的工具打开 Codex，可以继续使用原来的增强入口。安装 Live2D 后台服务后，它会自动识别官方应用的实际端口并挂载模型，无需再固定一个 Live2D 启动器，也不修改 Codex++ 配置。详见[启动设计与源码对照](docs/startup-design.md)。
+如果正在运行的 Codex 已有可用连接，后台直接复用并挂载，不重启应用；带参数但仍在启动的实例也不会被重复重启。项目保持独立，详见[启动和恢复机制](docs/startup-design.md)。
 
-通过 Dock、Finder 或 Spotlight 使用 **Codex Live2D.app**。直接打开原应用，或由链接先启动原应用时，可能缺少模型入口，后台会等待，不退出应用。保持官方安装包原样的前提下，无法保证所有外部入口都带上参数；这个模式优先保证使用过程不被打断。
+可选的 `npm run install:launcher` 仍能创建首次启动就带参数的入口，但推荐安装不需要它。后台服务位于应用包之外，官方更新不会覆盖服务；更新后普通打开缺少入口时仍执行一次恢复。
 
 齿轮打开设置，扬声器按钮控制朗读。
 
@@ -84,7 +84,7 @@ export CODEX_APP_PATH="/实际路径/Codex.app"
 npm run install:desktop
 ```
 
-### 4. 后台修复，不重启应用
+### 4. 自动启动恢复和模型修复
 
 上面的推荐安装已启用此服务。此前仅手动启动过模型的旧安装，可以单独启用：
 
@@ -92,9 +92,9 @@ npm run install:desktop
 npm run install:recovery
 ```
 
-这会注册当前用户的 `~/Library/LaunchAgents/com.codex-live2d.recovery.plist`，每两秒检查一次。后台识别官方应用主进程声明的调试端口，不再固定要求 19335；有加载入口时，自动修复缺失或失败的模型。缺少启动参数时记录 `waiting-for-launcher`，等待下次使用 **Codex Live2D.app** 打开；包括更新后，都不会自动退出或重开 Codex。主动退出应用时不拉起应用，关闭模型会禁用恢复。
+这会注册当前用户的 `~/Library/LaunchAgents/com.codex-live2d.recovery.plist`，每两秒检查一次。普通启动缺少模型连接时，等待约十秒后正常重启一次；同版本的新进程和更新后的启动都适用。失败后不会对同一进程循环重启。主动退出后不拉起应用，关闭模型会禁用恢复。
 
-恢复服务会检查模型是否就绪、是否挂载到页面、WebGL 状态、渲染帧是否增加及可见画布是否有实际像素，不再把“后台进程还活着”视为加载成功。模型缺失或渲染失败时，优先在不重启 Codex 的情况下重新挂载；失败后按两秒到一分钟的间隔退避重试，并替换失去响应的后台进程。手动收起、暂停、后台窗口和仅聊天时自动隐藏都保留。`state/watcher-health.json` 和 `state/recovery-status.json` 只记录渲染状态，不记录回答正文或 API Key。资源缺失、启动参数缺失或未来应用不兼容时仍需修正原因，不能保证自动恢复一定成功。
+恢复服务检查模型就绪状态、页面挂载、WebGL、帧计数和实际像素。已有模型连接时，模型或后台进程故障只重新挂载，不重启应用。手动收起、暂停、后台窗口和仅聊天时隐藏都保留。状态文件只记录渲染元数据，不记录正文或 API Key。退出确认、资源缺失及未来不兼容变化仍可能需要手动处理，不能保证所有情况都恢复成功。
 
 已有安装更新时，先运行 `git pull --ff-only`，再运行 `npm run install:desktop`（或再次双击 `Install.command`）。这会重新启用模型并让已注册的服务加载最新恢复代码，保留本机导入的资源和设置。
 
@@ -167,7 +167,7 @@ npm run pack:source  # 把已提交源码打包到 dist/，需要 Git 提交
 
 ## 排查与兼容范围
 
-- **打开应用或更新后模型消失：**查看 `state/recovery-status.json` 和 `state/recovery.log`。若状态为 `waiting-for-launcher`，请完成工作后自行退出，再从 Codex Live2D.app 打开；后台不会替你退出。
+- **打开应用或更新后模型消失：**查看 `state/recovery-status.json` 和日志。`wait-for-startup` 表示准备执行一次重启，`already-attempted` 或 `waiting-for-user-quit` 表示尝试失败且不会循环重启。处理退出确认、检查资源，再手动退出并打开 Codex 可重新尝试。
 - **缺少资源：**使用完整模型目录和兼容 runtime 重新导入，运行 `npm run doctor` 查看结果。
 - **没有朗读：**检查扬声器开关、Key、声音 ID 和模型名。音频上下文有时需要点击一次按钮才允许播放。
 - **模型关闭：**从齿轮入口重新展开；完整移除后用 `npm start` 恢复。
@@ -179,4 +179,4 @@ npm run pack:source  # 把已提交源码打包到 dist/，需要 Git 提交
 
 项目代码采用 [MIT](LICENSE)。浏览器库见[第三方说明](THIRD_PARTY_NOTICES.md)。模型、Live2D runtime 和商标遵循各自的条款。
 
-移除启动器：`npm run uninstall:launcher`，只删除插件创建的启动器，保留官方 Codex。启动器编译需要 Apple Command Line Tools；缺少时运行 `xcode-select --install`。项目移动后需重新运行 `npm run install:desktop`，更新启动器和后台服务中的路径。
+移除可选启动器：`npm run uninstall:launcher`。推荐安装不需要此启动器；项目移动后重新运行 `npm run install:desktop` 更新后台服务的路径。

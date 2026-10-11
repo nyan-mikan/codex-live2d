@@ -1,19 +1,21 @@
-# Startup and connection reuse
+# Ordinary official-app launch recovery
 
-The startup design was reviewed against [BigPizzaV3/CodexPlusPlus, `launcher.rs` at commit 28d4d775](https://github.com/BigPizzaV3/CodexPlusPlus/blob/28d4d7756131f94c90fe69b58403ce3c3744d6d8/crates/codex-plus-core/src/launcher.rs#L1098) and [its single-instance launcher](https://github.com/BigPizzaV3/CodexPlusPlus/blob/28d4d7756131f94c90fe69b58403ce3c3744d6d8/apps/codex-plus-launcher/src/main.rs#L726).
+The recommended installation keeps the official Codex bundle, signature and Dock entry unchanged. An independent user login service observes the exact official main process every two seconds. No Codex++ installation or configuration is required.
 
-Codex++ uses an external launch entry and CDP injection. Its macOS selector starts a new app when none is running, reuses an existing app when CDP is available, and requests a quit/relaunch when an existing app has no CDP connection. It does not make an ordinary unprepared launch injectable without a restart. Codex Live2D instead waits in that last case to respect uninterrupted work.
+| State | Action |
+| --- | --- |
+| App is not running or recovery is disabled | Wait; never open the app |
+| User opens app without a declared model connection | Wait ten seconds, normally quit and reopen once with loopback-only connection arguments |
+| Restart fails for the same process/version | Record failure; do not loop |
+| User later starts a new process | Allow a fresh recovery attempt |
+| Connection is declared but renderer is still starting | Wait without quitting |
+| Working connection at any declared local port | Reuse the running app |
+| Model or watcher fails with a working connection | Repair the companion without restarting the app |
 
-| Official application | Model connection | Codex Live2D behavior |
-| --- | --- | --- |
-| Not running | None | A user launcher click starts it once with connection arguments |
-| Running | Available at any declared local port | Reuse the app and attach the companion |
-| Running | Missing | Keep the app running and wait for a prepared user launch |
-| Running | Model missing or stalled | Remount or replace the companion watcher; leave the app running |
-| Quit by the user | Any | Wait; do not reopen the app |
+Recovery records the attempt before dispatch. Before requesting a normal quit, the activation helper confirms the observed process still exists and recovery is still enabled. The helper is launched by the login service, so it survives Codex closing. Quit prompts are respected; there is no forced termination. A successful relaunch records its resulting process ID to prevent the restart itself from granting another attempt if initialization fails.
 
-The project remains independently installed and maintained. It can attach to a Codex instance opened by Codex++, another launcher, or a terminal when that process declares a CDP port. Its background service reads the exact official main process IDs and those processes' debug-port arguments, then validates local Codex page targets. It does not scan ports, edit other tools' settings, change providers, or read their credentials. Chromium uses the last repeated debug-port switch; discovery follows that rule.
+The optional independent launcher passes connection arguments on the first opening. A live launch lock suppresses competing recovery. The normal recommended installer only validates assets and registers the service; it does not create a replacement Dock icon.
 
-The launch entry is serialized by a local lock. Repeated clicks focus an existing prepared app and retain its watcher. Application launch uses `open -a`, allowing LaunchServices to reuse an instance if another launch races with ours. Recovery tracks the selected port and replaces only watchers belonging to this project when the app moves to another port.
+The initial source comparison used [BigPizzaV3/CodexPlusPlus](https://github.com/BigPizzaV3/CodexPlusPlus). The installed [v1.2.38 launch code](https://github.com/BigPizzaV3/CodexPlusPlus/blob/v1.2.38/crates/codex-plus-core/src/launcher.rs#L713) uses an external entry on macOS, and its [watcher installation](https://github.com/BigPizzaV3/CodexPlusPlus/blob/v1.2.38/crates/codex-plus-core/src/watcher.rs#L170) is Windows-only. The later [macOS selector](https://github.com/BigPizzaV3/CodexPlusPlus/blob/28d4d7756131f94c90fe69b58403ce3c3744d6d8/crates/codex-plus-core/src/launcher.rs#L1098) reuses a debug-ready app and restarts an unprepared app. This project's startup and recovery implementation is independently written; no upstream source or provider management is included.
 
-This is an independently written implementation of the connection-reuse approach. No Codex++ source code is included in the project.
+Signature-changing direct-bootstrap prototypes were rejected and are not shipped. Application assets, credentials and character-specific settings stay local. Internal UI compatibility, blocked normal quit requests or missing resources can still prevent recovery; health reports must confirm the actual renderer rather than merely a live helper process.

@@ -4,7 +4,7 @@ import {fileURLToPath} from 'node:url';
 import {spawn,execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import {targets,isCodexMain} from './cdp.mjs';
-import {appRunning,watcherPids} from './app-process.mjs';
+import {appRunning,appProcessIds,watcherPids} from './app-process.mjs';
 import {appPath,appInfo} from './app-config.mjs';
 import {findEndpoint} from './endpoint.mjs';
 import {checkAssets} from './setup.mjs';
@@ -53,9 +53,13 @@ if(command==='remove'){
     const {executable,bundleId}=await appInfo();
     const running=await appRunning(executable);
     if(fromRecovery&&!running){await launchPhase('cancelled-user-quit');process.exit(0);}
-    if(running&&(!restart||fromRecovery)){
+    const expectedIndex=process.argv.indexOf('--expected-pid');
+    if(fromRecovery&&expectedIndex>=0&&!((await appProcessIds(executable)).includes(Number(process.argv[expectedIndex+1])))){
+      await launchPhase('cancelled-user-quit');process.exit(0);
+    }
+    if(running&&!restart){
       await launchPhase('waiting-for-user-launch');
-      console.log('Codex is already running without the model connection. It was left running. Next time, open Codex Live2D.app. / Codex 正在运行，已保留当前窗口；下次请从 Codex Live2D.app 打开。');
+      console.log('Codex is running without the model connection. Installed automatic recovery will restart it once after startup. / Codex 当前缺少模型连接；已安装的自动恢复服务会在启动后正常重启一次并挂载。');
       process.exit(0);
     }
     if(running){

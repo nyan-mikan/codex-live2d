@@ -17,12 +17,12 @@ This is an independent macOS add-on. It attaches to the running desktop interfac
 - A neutral face while speaking, with audio-driven mouth movement.
 - Markdown, emoji, citation/reference markers, and lowercase laughter such as `www` are removed before speech. URLs containing `www` are preserved.
 - Turning the speaker off stops playback and requests and clears queued audio. Turning it back on reads future text only.
-- Automatically reuse the local connection declared by the official Codex main process, including Codex++ launches on other ports. The project stays independent.
-- A lightweight Dock launcher opens the official app with model parameters on the first attempt. Background recovery repairs the companion without automatically quitting Codex.
+- Automatically reuse the running official application’s declared local connection, regardless of port. No other enhancement tool is required.
+- Open the original Codex from Dock, Finder, Spotlight or links. If its model connection is missing, recovery normally restarts it once after startup.
 
 ## Requirements
 
-- macOS, Node.js **22 or later**, and Apple Command Line Tools (`xcode-select --install`) to build the tiny local launcher; npm comes with Node.js.
+- macOS and Node.js **22 or later**; npm comes with Node.js. Apple Command Line Tools are needed only for the optional launcher.
 - The Codex desktop application. `/Applications/ChatGPT.app` and `/Applications/Codex.app` are detected automatically.
 - A **Cubism 2.1** model (`.model.json` and `.moc`) and its textures/resources.
 - A compatible Cubism 2.1 `live2d.min.js` runtime that you supply separately.
@@ -67,13 +67,13 @@ npm run doctor
 npm run install:desktop
 ```
 
-Installation creates `~/Applications/Codex Live2D.app`, using the installed Codex icon. Drag this launcher to Dock and remove the old pinned Codex shortcut. It starts the real, unmodified Codex application with the local connection parameters immediately, with no quit/reopen cycle and no Terminal window. Clicking while Codex is running focuses it without restarting the watcher or interrupting speech. The launcher follows the official application's installed path, so replacing the app during updates does not overwrite it.
+Installation registers a user background service. Keep your original Codex Dock icon and open the official application normally from Dock, Finder, Spotlight or a link. After about ten seconds without a model connection, the service requests a normal quit and reopens Codex once with loopback-only connection parameters, then mounts the companion. The official application bundle and signature stay unchanged.
 
-Or double-click `Install.command` after importing assets. If Codex is already running without a model connection, installation leaves it running: finish your work, quit it yourself, then use the new launcher next time. `Start.command` / `npm start` use the same no-restart behavior.
+Or double-click `Install.command` after importing assets. No replacement Dock entry is created. The service also handles a currently running unprepared app after its startup grace period, so installation can cause one normal restart. macOS may request permission to control Codex for the normal quit request; quit prompts are respected and processes are not force-killed.
 
-If you already launch Codex through Codex++ or another tool that enables CDP, keep using that entry. After installing the Live2D recovery service, it automatically detects the actual official app port and attaches the model; you do not need to pin a second launcher. No Codex++ configuration is edited. See [startup design and the source comparison](docs/startup-design.md).
+If the running app already declares a working connection, the service reuses it and attaches the model without restarting. A declared connection that is still starting is also left alone. The project remains independent; [startup details](docs/startup-design.md) explain the recovery guard.
 
-Use **Codex Live2D.app** for Dock, Finder or Spotlight launches. Opening the original application directly, or through a link that launches it first, may omit the model connection; recovery waits instead of quitting the app. Keeping the original bundle intact means startup arguments cannot be guaranteed for every external entry point. This mode prioritizes uninterrupted work.
+The optional `npm run install:launcher` entry can still open Codex with the connection parameters on its first launch. It is not required for the recommended installation. The background service survives official app updates because it lives outside the application bundle.
 
 The gear button opens settings; the speaker button toggles speech. Choose **Language → English / 中文** at the top of settings. The first launch follows your system language (Chinese for `zh`, English otherwise); your selection is saved locally and survives reloads. Switching language preserves unsaved form fields and ongoing speech. Assistant text and custom expression labels are kept in their original language.
 
@@ -84,7 +84,7 @@ export CODEX_APP_PATH="/path/to/Codex.app"
 npm run install:desktop
 ```
 
-### 4. Background recovery without app restarts
+### 4. Automatic startup and model recovery
 
 The recommended install above already enables this service. For an existing installation that was started manually, enable it with:
 
@@ -92,9 +92,9 @@ The recommended install above already enables this service. For an existing inst
 npm run install:recovery
 ```
 
-This registers `~/Library/LaunchAgents/com.codex-live2d.recovery.plist` for your user account and checks every two seconds. The service detects the running official application’s declared debug port and restores missing or failed models when that connection is available, even when it is not port 19335. If startup parameters are absent, it records `waiting-for-launcher` and waits for your next launch through **Codex Live2D.app**. It never automatically quits or reopens Codex, including after updates, and respects intentional quits. Stopping the companion disables recovery.
+This registers `~/Library/LaunchAgents/com.codex-live2d.recovery.plist` and checks every two seconds. An unprepared launch is normally restarted once after a ten-second grace period, including a new process at the same app version or after an update. A failed restart is not retried against that same process. Intentional quits are not reopened. Stopping the companion disables recovery.
 
-Recovery verifies actual model readiness, host attachment, WebGL, frame progress, and visible canvas pixels. A live watcher alone is not considered success. Missing or failed renderers are remounted without restarting Codex, with retries backing off from two seconds to one minute. A stale or unhealthy watcher is replaced. Collapsed models, paused animation, background windows and chat-only hiding are preserved. Health summaries in `state/watcher-health.json` and `state/recovery-status.json` contain renderer metadata only, not answer bodies or API keys. Missing assets, absent startup parameters and incompatible future app changes still need correction; automatic recovery cannot guarantee success in those cases.
+Recovery verifies actual model readiness, host attachment, WebGL, frame progress and visible canvas pixels. Once the app has a connection, failed models and watchers are repaired without an app restart. Collapsed models, paused animation, background windows and chat-only hiding are preserved. Health summaries contain renderer metadata only, not answer bodies or API keys. Quit prompts, missing assets and incompatible future app changes may need manual correction; recovery cannot guarantee success in those cases.
 
 To update an existing checkout, run `git pull --ff-only` and then `npm run install:desktop` (or double-click `Install.command` again). This reactivates the companion and reloads the registered service with the latest recovery code. Locally imported assets and settings are retained.
 
@@ -138,7 +138,7 @@ npm run uninstall:launcher    # remove only the companion launcher
 
 `Stop.command` also removes the companion. Normally quit and reopen Codex afterward to close the temporary debugging endpoint. `npm start` re-enables the companion and recovery if the service remains installed.
 
-Before moving the folder, stop the companion and uninstall recovery from the old folder. Run `npm run install:desktop` from the new folder to rebuild the launcher and register recovery with its new paths. Do not run multiple copies of the watcher/service for the same endpoint.
+Before moving the folder, stop the companion and uninstall recovery from the old folder. Run `npm run install:desktop` from the new folder to register the service with its new paths. Reinstall the optional launcher separately if you use it. Do not run multiple watcher/service copies for the same app.
 
 ## Development
 
@@ -166,7 +166,7 @@ Tests mock Fish Audio and do not send paid synthesis requests. `npm run pack:sou
 
 ## Troubleshooting and compatibility
 
-- **Model missing after opening the app or an update:** inspect `state/recovery-status.json` and `state/recovery.log`. For `waiting-for-launcher`, finish your work, quit the app yourself, then open Codex Live2D.app; recovery will not quit it for you.
+- **Model missing after opening or updating Codex:** Check `state/recovery-status.json` and `state/recovery.log`. `wait-for-startup` precedes the one-time restart; `already-attempted` or `waiting-for-user-quit` indicates a failed attempt that will not loop. Resolve any normal-quit prompt, verify assets, then quit and open Codex yourself to allow a new attempt.
 - **Missing assets:** rerun setup with the entire model directory and a compatible runtime; `npm run doctor` reports missing resources.
 - **No speech:** check the speaker toggle, API key, voice ID and model. Some audio contexts need a user click to start playback.
 - **Model closed:** reopen it from the gear entry; to restore a fully removed companion, run `npm start`.

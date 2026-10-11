@@ -9,20 +9,20 @@ test('Full executable paths exclude helpers and similarly named applications',()
   const exe='/Applications/ChatGPT.app/Contents/MacOS/ChatGPT';
   assert.deepEqual(appPids(` 123 ${exe}\n 124 ${exe} Helper\n 125 ${exe}-other\n`,exe),[123]);
 });
-test('Every unprepared launch waits for the launcher and never restarts, including updates and new processes',()=>{
+test('Every ordinary launch is restarted once after startup grace, including same-version launches',()=>{
   for(const version of [baseline.lastDebugVersion,observed.version]){
     let state=baseline;
-    for(const [pid,now] of [[123,1000],[123,30000],[123,300000],[456,400000]]){
+    for(const [pid,now,action] of [[123,1000,'wait-for-startup'],[123,10999,'wait-for-startup'],[123,11000,'restart-app'],[123,300000,'already-attempted'],[456,400000,'wait-for-startup'],[456,410000,'restart-app']]){
       const result=decide(state,{...observed,version,pid,now});
-      assert.equal(result.action,'waiting-for-launcher');state=result.state;
+      assert.equal(result.action,action);state=result.state;
     }
   }
-  assert.equal(decide({},observed).action,'waiting-for-launcher');
+  assert.equal(decide({},observed).action,'wait-for-startup');
 });
-test('Old scheduled restart and failure state cannot cause a quit after migration',()=>{
+test('A failed attempt is not repeated against the same live process',()=>{
   const old={...baseline,missingSince:1,missingVersion:observed.version,lastAttemptedVersion:observed.version,failure:{reason:'waiting'}};
-  const result=decide(old,{...observed,now:999999});assert.equal(result.action,'waiting-for-launcher');
-  assert.equal(result.state.failure,undefined);assert.equal(result.state.missingSince,undefined);
+  const result=decide(old,{...observed,now:999999});assert.equal(result.action,'already-attempted');
+  assert.equal(result.state.failure.reason,'waiting');
 });
 test('User quit and disabling recovery suppress all watcher and startup actions',()=>{
   for(const debugReady of [true,false])for(const stop of [{running:false},{disabled:true}]){
@@ -72,4 +72,17 @@ test('A live bounded launcher activation is not interrupted by a second watcher 
   const released=decide(first.state,{...busy,launcherBusy:false,now:121000});
   assert.equal(released.action,'wait-for-model');
   assert.equal(decide(released.state,{...busy,launcherBusy:false,now:131000}).action,'start-watcher');
+});
+test('A declared debugging port still starting or a live launcher is never interrupted by another app restart',()=>{
+  for(const fields of [{debugDeclared:true},{launcherBusy:true}]){
+    let state=baseline;
+    for(const now of [1000,100000,1000000]){const result=decide(state,{...observed,...fields,now});assert.equal(result.action,fields.debugDeclared?'wait-for-endpoint':'wait-for-launcher');state=result.state;}
+  }
+});
+test('A completed restart is idle when healthy, and subsequent renderer failure only repairs its watcher',()=>{
+  const waiting=decide(baseline,{...observed,pid:123}).state;
+  const restart=decide(waiting,{...observed,pid:123,now:11000});assert.equal(restart.action,'restart-app');
+  const healthy=decide({...restart.state,lastSeenPid:456},{...observed,pid:456,debugReady:true,modelHealthy:true,now:15000});assert.equal(healthy.action,'idle');
+  const bad={...observed,pid:456,debugReady:true,modelHealthy:false,now:16000};const missing=decide(healthy.state,bad);
+  assert.equal(decide(missing.state,{...bad,now:26000}).action,'repair-watcher');
 });

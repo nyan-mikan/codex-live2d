@@ -24,7 +24,7 @@ if(process.argv[1]===fileURLToPath(import.meta.url)){
   await fs.mkdir(stateDir,{recursive:true});
   const plist=agentPlist(process.execPath,root),preview=path.join(stateDir,'recovery-agent.plist');
   await fs.writeFile(preview,plist);await execute('/usr/bin/plutil',['-lint',preview]);
-  if(dry){console.log(JSON.stringify({preview,installPath:agentPath,label,behavior:'持续验证模型并修复挂载；缺少启动参数时等待用户通过启动器打开，绝不自动退出或重开应用。'}));}
+  if(dry){console.log(JSON.stringify({preview,installPath:agentPath,label,behavior:'普通启动缺少模型连接时等待10秒后正常重启一次；已有连接只修复模型；主动退出后不重开。'}));}
   else{
     const i=process.argv.indexOf('--previous-version'),previous=i>=0?process.argv[i+1]:null;
     if(previous&&!/^[0-9.]+$/.test(previous))throw new Error('Invalid previous version');

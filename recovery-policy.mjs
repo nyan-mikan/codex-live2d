@@ -16,7 +16,7 @@ export function recoveryDecision(previous, observation, graceMs=10000){
     return {state,action:'idle'};
   }
   if(debugReady){
-    state.lastDebugVersion=version;delete state.missingSince;delete state.missingVersion;
+    state.lastDebugVersion=version;delete state.missingSince;delete state.missingVersion;delete state.lastAttemptedVersion;
     const healthy=watcherAlive&&observation.modelHealthy!==false;
     if(healthy){delete state.failure;delete state.modelMissingSince;delete state.nextRepairAt;delete state.repairAttempts;return {state,action:'idle'};}
     if(observation.launcherBusy)return {state,action:'wait-for-model'};
@@ -28,7 +28,14 @@ export function recoveryDecision(previous, observation, graceMs=10000){
     state.nextRepairAt=now+Math.min(60000,5000*2**Math.min(state.repairAttempts-1,4));
     return {state,action:watcherAlive?'repair-watcher':'start-watcher'};
   }
-  // A missing startup connection must never cause an unsolicited application quit.
-  delete state.missingSince;delete state.missingVersion;delete state.failure;
-  return {state,action:'waiting-for-launcher'};
+  // Ordinary Dock/Finder launches need a single normal restart with connection flags.
+  // Never interrupt a prepared app that is still opening its renderer or a live launcher.
+  if(observation.launcherBusy)return {state,action:'wait-for-launcher'};
+  if(observation.debugDeclared){delete state.missingSince;delete state.missingVersion;return {state,action:'wait-for-endpoint'};}
+  if(state.lastAttemptedVersion===version)return {state,action:'already-attempted'};
+  if(state.missingVersion!==version){state.missingVersion=version;state.missingSince=now;}
+  state.missingSince??=now;
+  if(now-state.missingSince<graceMs)return {state,action:'wait-for-startup'};
+  state.lastAttemptedVersion=version;
+  return {state,action:'restart-app'};
 }
