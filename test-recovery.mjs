@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {recoveryDecision} from './recovery-policy.mjs';
+import {recoveryDecision as decide} from './recovery-policy.mjs';
+const recoveryDecision=(state,observation)=>decide(state,observation,45000);
 import {agentPlist} from './install-recovery.mjs';
 import {appPids} from './app-process.mjs';
 const baseline={lastDebugVersion:'26.1002.52244'};
@@ -71,7 +72,8 @@ test('A second version change restarts the stability timer',()=>{
   assert.equal(next.state.missingSince,40000);assert.equal(recoveryDecision(next.state,{...updated,version:'26.1010.1',now:85000}).action,'restore-update');
 });
 test('An existing debug endpoint starts a missing watcher without restarting the application',()=>{
-  const found=recoveryDecision(baseline,{...updated,debugReady:true,watcherAlive:false});assert.equal(found.action,'start-watcher');
+  const first=recoveryDecision(baseline,{...updated,debugReady:true,watcherAlive:false});assert.equal(first.action,'wait-for-model');
+  const found=recoveryDecision(first.state,{...updated,debugReady:true,watcherAlive:false,now:46000});assert.equal(found.action,'start-watcher');
   assert.equal(recoveryDecision(found.state,{...updated,debugReady:true,watcherAlive:true}).action,'idle');
 });
 test('An intentional remove disables both update restoration and watcher resurrection',()=>{
@@ -90,4 +92,34 @@ test('The login agent uses the independent workspace and safely escapes paths',(
   assert(plist.includes('/Node &amp; Tools/node'));assert(plist.includes('/Workspace &lt;Companion&gt;/recovery.mjs'));
   assert(plist.includes('<key>RunAtLoad</key><true/>'));assert(plist.includes('<key>KeepAlive</key><true/>'));
   assert(!plist.includes('remote-debugging-address=0.0.0.0'));assert(!plist.includes('apiKey'));
+});
+
+test('Default startup recovery begins after ten seconds, independent of launch source',()=>{
+  const first=decide(baseline,updated);assert.equal(first.action,'wait-for-update');
+  assert.equal(decide(first.state,{...updated,now:10999}).action,'wait-for-update');
+  assert.equal(decide(first.state,{...updated,now:11000}).action,'restore-update');
+});
+test('A living watcher with no healthy model is repaired without restarting the app',()=>{
+  const bad={...updated,debugReady:true,modelHealthy:false,pid:42};
+  const first=decide(baseline,bad);assert.equal(first.action,'wait-for-model');
+  const repair=decide(first.state,{...bad,now:11000});assert.equal(repair.action,'repair-watcher');
+  assert.equal(decide(repair.state,{...bad,now:12000}).action,'wait-for-retry');
+  const retry=decide(repair.state,{...bad,now:16000});assert.equal(retry.action,'repair-watcher');
+  assert(retry.state.nextRepairAt>repair.state.nextRepairAt);
+  const healthy=decide(retry.state,{...bad,modelHealthy:true,now:17000});assert.equal(healthy.action,'idle');
+  assert.equal(healthy.state.repairAttempts,undefined);
+});
+test('Missing and stale heartbeat repairs remain cancelled after user quit or removal',()=>{
+  const first=decide(baseline,{...updated,debugReady:true,modelHealthy:false});
+  for(const observation of [{running:false},{disabled:true}]){
+    const cancelled=decide(first.state,{...updated,debugReady:true,modelHealthy:false,now:100000,...observation});
+    assert.equal(cancelled.action,'idle');assert.equal(cancelled.state.modelMissingSince,undefined);
+  }
+});
+
+test('In-progress bounded model loading is not killed by the recovery monitor',()=>{
+  const loading={...updated,debugReady:true,modelHealthy:false,modelLoading:true};
+  const first=decide(baseline,loading);
+  const stillLoading=decide(first.state,{...loading,now:40000});assert.equal(stillLoading.action,'wait-for-model');
+  const expired=decide(stillLoading.state,{...loading,modelLoading:false,now:50000});assert.equal(expired.action,'repair-watcher');
 });

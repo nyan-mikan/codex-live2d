@@ -283,7 +283,9 @@ globalThis.mountCompanion = async function mountCompanion(assetMap, options = {}
     health() { return { version:11, chatOnly:state.chatOnly, hiddenReason:state.hiddenReason, language:state.language, talking:state.talking, effectiveExpression:state.talking?'neutral':state.expression, voice:speechController.health(), answer:{connected:answer.connected,characters:answer.text.length,deltaCharacters:answer.delta.length,events:answer.events,completed:answer.completed,visible:false}, collapsed:state.collapsed, ready:!!model && !disposed, closed:disposed, frames:state.frames, paused:state.paused, hidden:state.hidden, interactive:state.interactive, follow:state.follow, expression:state.expression, lower:state.lower, gaze:{target:state.gaze,current:model&&!disposed?{x:model.internalModel.focusController.x,y:model.internalModel.focusController.y}:null}, renderedFace:state.renderedFace, bounds:state.bounds, viewport:[innerWidth,innerHeight], size:[canvas.clientWidth,canvas.clientHeight], webglLost:!!app?.renderer?.gl?.isContextLost(), error:state.error, motions:model && !disposed ? Object.fromEntries(Object.entries(model.internalModel.motionManager.definitions).map(([k,v])=>[k,v.length])) : null }; },
     pixels() {
       if (!app || !model || disposed) return null;
-      app.render(); const gl=app.renderer.gl, w=app.renderer.width,h=app.renderer.height;
+      // Diagnostic renders must not mask a stalled animation by advancing its frame counter.
+      const frames=state.frames;try{app.render();}finally{state.frames=frames;}
+      const gl=app.renderer.gl, w=app.renderer.width,h=app.renderer.height;
       const pixels=new Uint8Array(w*h*4);gl.readPixels(0,0,w,h,gl.RGBA,gl.UNSIGNED_BYTE,pixels);
       let opaque=0,transparent=0;for(let i=3;i<pixels.length;i+=4){if(pixels[i]>20)opaque++;if(pixels[i]===0)transparent++;}
       return {opaque,transparent,total:w*h};
