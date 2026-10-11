@@ -17,7 +17,7 @@
 - 朗读时使用自然表情，嘴部随声音变化。
 - 朗读前清理 Markdown、emoji、引用标记和 `www` 等笑声；保留网址中的 `www`。
 - 关闭扬声器立即停止播放、取消请求和清空缓存，再开启只读之后的新文字。
-- 可安装登录服务，检测更新后启动参数丢失并尝试恢复模型。
+- 可安装登录服务，检测 Dock 普通启动或更新后启动参数丢失并恢复模型。
 
 ## 环境要求
 
@@ -77,15 +77,15 @@ export CODEX_APP_PATH="/实际路径/Codex.app"
 npm start
 ```
 
-### 4. 可选：安装更新恢复服务
+### 4. 可选：安装 Dock 与更新恢复服务
 
 ```sh
 npm run install:recovery
 ```
 
-这会注册当前用户的 `~/Library/LaunchAgents/com.codex-live2d.recovery.plist`，每 10 秒检查一次。当版本变化、应用正在运行且调试入口丢失时，等待至少 45 秒，再尝试正常重启并挂载模型。服务保存安装时使用的应用、Node 和项目路径。
+这会注册当前用户的 `~/Library/LaunchAgents/com.codex-live2d.recovery.plist`，每 10 秒检查一次。成功启用过模型后，可以继续从原来的 Dock 图标打开 Codex。普通启动或更新后，若应用正在运行但调试入口缺失，等待至少 45 秒，再尝试正常重开一次并挂载模型。结合检查间隔，通常在打开后约 45–60 秒开始恢复；重开可能中断正在进行的任务，请等待模型出现后再开始工作。服务保存安装时使用的应用、Node 和项目路径。
 
-若有退出确认，仍需你确认。同一次应用运行期间失败后不反复尝试；手动退出并重新打开后可以再次尝试。主动退出应用时不拉起应用；同一版本的普通启动未启用调试时也不强制重启。
+若有退出确认，仍需你确认。同一次应用运行期间失败后不反复尝试；手动退出并重新打开后可以再次尝试。主动退出应用时不拉起应用；同版本的普通启动也会恢复；从未成功启用模型的安装不会触发重开，关闭模型会禁用恢复。
 
 导入资源后，双击 `Install.command` 可合并首次启动和恢复服务安装。
 
@@ -153,12 +153,12 @@ npm run pack:source  # 把已提交源码打包到 dist/，需要 Git 提交
 | `speech-text.js` | 清理文字和分句 |
 | `fish-client.js` / `fish-host.mjs` | 语音队列、预取、播放和 API 请求 |
 | `inject.mjs` / `cdp.mjs` | 本机挂载与守护进程 |
-| `control.mjs` / `recovery*.mjs` | 启动、关闭和更新恢复 |
+| `control.mjs` / `recovery*.mjs` | 启动、关闭、Dock 与更新恢复 |
 | `setup.mjs` | 导入并验证本机模型与 runtime |
 
 ## 排查与兼容范围
 
-- **更新后模型消失：**查看 `state/recovery-status.json` 和 `state/recovery.log`。结束工作并确认退出；自动恢复没有完成时，运行 `npm start`。
+- **Dock 启动或更新后模型消失：**查看 `state/recovery-status.json` 和 `state/recovery.log`。结束工作并确认退出；自动恢复没有完成时，运行 `npm start`。
 - **缺少资源：**使用完整模型目录和兼容 runtime 重新导入，运行 `npm run doctor` 查看结果。
 - **没有朗读：**检查扬声器开关、Key、声音 ID 和模型名。音频上下文有时需要点击一次按钮才允许播放。
 - **模型关闭：**从齿轮入口重新展开；完整移除后用 `npm start` 恢复。

@@ -17,7 +17,7 @@ This is an independent macOS add-on. It attaches to the running desktop interfac
 - A neutral face while speaking, with audio-driven mouth movement.
 - Markdown, emoji, citation/reference markers, and lowercase laughter such as `www` are removed before speech. URLs containing `www` are preserved.
 - Turning the speaker off stops playback and requests and clears queued audio. Turning it back on reads future text only.
-- Optional login service that detects lost startup arguments after an application update and attempts recovery.
+- Optional login service that recovers lost startup arguments after Dock launches and application updates.
 
 ## Requirements
 
@@ -77,15 +77,15 @@ export CODEX_APP_PATH="/path/to/Codex.app"
 npm start
 ```
 
-### 4. Optional: enable update recovery
+### 4. Optional: enable Dock and update recovery
 
 ```sh
 npm run install:recovery
 ```
 
-This registers `~/Library/LaunchAgents/com.codex-live2d.recovery.plist` for your user account. It checks every 10 seconds. When the installed version changes and the app is running without its debug endpoint, it waits at least 45 seconds, then tries a normal restart and reattaches the companion. The service remembers the selected app path and the Node/project paths used at installation.
+This registers `~/Library/LaunchAgents/com.codex-live2d.recovery.plist` for your user account. It checks every 10 seconds. After a successful companion activation, you can keep launching Codex from its usual Dock icon. If a normal launch or application update starts the app without its debug endpoint, the service waits at least 45 seconds, then tries one normal restart and reattaches the companion. With its polling interval, recovery normally begins about 45–60 seconds after opening. This may interrupt active work; wait for the companion to appear before starting a task. The service remembers the selected app path and the Node/project paths used at installation.
 
-A quit confirmation may still require your action. A failed attempt is not repeated during the same app run; after you quit and reopen the app, it may try again. It does not reopen an intentionally quit app. Normal launches of the same version without debugging are left alone.
+A quit confirmation may still require your action. A failed attempt is not repeated during the same app run; after you quit and reopen the app, it may try again. It does not reopen an intentionally quit app. The same rule applies to ordinary launches of the same version. Installations that have never activated the companion are left alone; stopping the companion disables recovery.
 
 After importing assets, `Install.command` combines first launch and recovery-service installation.
 
@@ -151,12 +151,12 @@ Tests mock Fish Audio and do not send paid synthesis requests. `npm run pack:sou
 | `speech-text.js` | Text cleanup and sentence tracking |
 | `fish-client.js` / `fish-host.mjs` | Speech queue, prefetch, playback and API transport |
 | `inject.mjs` / `cdp.mjs` | Local attachment and watcher |
-| `control.mjs` / `recovery*.mjs` | Launch, removal and update recovery |
+| `control.mjs` / `recovery*.mjs` | Launch, removal, Dock and update recovery |
 | `setup.mjs` | Import and validate local model/runtime resources |
 
 ## Troubleshooting and compatibility
 
-- **Model missing after an update:** inspect `state/recovery-status.json` and `state/recovery.log`. Finish active work, confirm normal exit, then run `npm start` if recovery could not complete.
+- **Model missing after a Dock launch or update:** inspect `state/recovery-status.json` and `state/recovery.log`. Finish active work, confirm normal exit, then run `npm start` if recovery could not complete.
 - **Missing assets:** rerun setup with the entire model directory and a compatible runtime; `npm run doctor` reports missing resources.
 - **No speech:** check the speaker toggle, API key, voice ID and model. Some audio contexts need a user click to start playback.
 - **Model closed:** reopen it from the gear entry; to restore a fully removed companion, run `npm start`.

@@ -19,11 +19,13 @@ export function recoveryDecision(previous, observation, graceMs=45000){
     state.lastDebugVersion=version;delete state.missingSince;delete state.missingVersion;delete state.failure;
     return {state,action:watcherAlive?'idle':'start-watcher'};
   }
-  // Ordinary launches without debugging must not cause surprise restart loops.
-  if(!version||!state.lastDebugVersion||version===state.lastDebugVersion)return {state,action:'idle'};
+  // A successful previous activation opts into recovery for Dock launches as well as updates.
+  // The disabled flag, grace period and per-run attempt guard also apply to ordinary starts.
+  if(!version||!state.lastDebugVersion)return {state,action:'idle'};
+  const updated=version!==state.lastDebugVersion;
   if(state.lastAttemptedVersion===version)return {state,action:'already-attempted'};
   if(state.missingVersion!==version){state.missingVersion=version;state.missingSince=now;}
-  if(now-state.missingSince<graceMs)return {state,action:'wait-for-update'};
+  if(now-state.missingSince<graceMs)return {state,action:updated?'wait-for-update':'wait-for-startup'};
   state.lastAttemptedVersion=version;state.lastAttemptedAt=now;
-  return {state,action:'restore-update'};
+  return {state,action:updated?'restore-update':'restore-startup'};
 }

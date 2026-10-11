@@ -41,14 +41,21 @@ while(!stopping){
     const failure=decision.state.failure?.version===info.version?decision.state.failure:null;
     await writeJSON('recovery-status.json',{checkedAt:new Date().toISOString(),version:info.version,running:info.running,debugReady:observation.debugReady,disabled:observation.disabled,action:failure&&decision.action==='already-attempted'?'waiting-for-user-quit':decision.action,...(failure?{reason:failure.reason}: {})});
     if(decision.action!==lastAction){console.log(new Date().toISOString(),decision.action,info.version??'app-unavailable');lastAction=decision.action;}
-    if(decision.action==='restore-update'||decision.action==='start-watcher'){
+    if(['restore-update','restore-startup','start-watcher'].includes(decision.action)){
       // Same reversible, normal-quit launcher as the user's existing start script.
-      // Restart is only allowed for a changed version with a missing debug endpoint.
-      const args=[path.join(root,'control.mjs'),'start','--from-recovery'];if(decision.action==='restore-update')args.push('--restart');
+      // Previously activated installations recover missing debug startup flags, including Dock launches.
+      const args=[path.join(root,'control.mjs'),'start','--from-recovery'];if(decision.action!=='start-watcher')args.push('--restart');
       try{
         await execute(process.execPath,args,{timeout:180000,maxBuffer:1024*1024});
+        // Record the launcher's resulting PID so our own relaunch cannot reset the retry guard.
+        const current=await appInfo();
+        if(current.pid)decision.state.lastSeenPid=current.pid;
+        delete decision.state.failure;
+        await writeJSON('recovery-state.json',decision.state);
         console.log(new Date().toISOString(),'recovery-complete',info.version);
       }catch(error){
+        const current=await appInfo();
+        if(current.pid)decision.state.lastSeenPid=current.pid;
         const {phase}=await readJSON('launcher-status.json');
         const reason=phase==='waiting-for-quit'||phase==='quit-blocked'?'Codex 未完成正常退出；请结束任务，并确认 Codex 的退出提示，然后重新打开应用。':phase==='requesting-quit'?'macOS 未完成退出请求；请手动运行Start.command，并允许控制应用。':phase==='opening'?'应用未出现可连接的调试入口；请手动运行Start.command。':'模型挂载未完成；请手动运行Start.command。';
         decision.state.failure={version:info.version,reason,phase,failedAt:new Date().toISOString()};
