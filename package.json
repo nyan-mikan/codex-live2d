@@ -15,7 +15,7 @@
   "scripts": {
     "setup": "node setup.mjs",
     "doctor": "node doctor.mjs",
-    "start": "node control.mjs start --restart",
+    "start": "node launch.mjs",
     "reload": "node control.mjs start --reload",
     "stop": "node control.mjs remove",
     "install:recovery": "node install-recovery.mjs",
@@ -24,6 +24,8 @@
     "verify": "node inject.mjs --verify --port 19335",
     "test": "node --test test-*.mjs",
     "pack:source": "node scripts/package-source.mjs",
-    "install:desktop": "node install.mjs"
+    "install:desktop": "node install.mjs",
+    "install:launcher": "node install-launcher.mjs",
+    "uninstall:launcher": "node install-launcher.mjs --uninstall"
   }
 }

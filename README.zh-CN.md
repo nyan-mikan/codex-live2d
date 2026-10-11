@@ -17,11 +17,11 @@
 - 朗读时使用自然表情，嘴部随声音变化。
 - 朗读前清理 Markdown、emoji、引用标记和 `www` 等笑声；保留网址中的 `www`。
 - 关闭扬声器立即停止播放、取消请求和清空缓存，再开启只读之后的新文字。
-- 推荐安装流程默认安装自动恢复服务，不论从哪个入口打开 Codex，或应用更新后，都能检测启动参数丢失并恢复模型。
+- 轻量 Dock 启动器首次就带参数打开官方应用；后台只修复模型，不自动退出 Codex。
 
 ## 环境要求
 
-- macOS，Node.js **22 或更新版本**；Node.js 自带 npm。
+- macOS，Node.js **22 或更新版本**，以及编译本机启动器所需的 Apple Command Line Tools（`xcode-select --install`）；Node.js 自带 npm。
 - Codex 桌面应用，自动检测 `/Applications/ChatGPT.app` 和 `/Applications/Codex.app`。
 - 你自行提供的 **Cubism 2.1** 模型：`.model.json`、`.moc`、贴图和相关资源。
 - 自行提供兼容的 Cubism 2.1 `live2d.min.js` runtime。
@@ -66,9 +66,13 @@ npm run doctor
 npm run install:desktop
 ```
 
-启动时可能正常退出并重新打开 Codex，以开启 `127.0.0.1:19335` 或本机 IPv6 上的调试入口，请先结束当前工作。若 macOS 询问控制应用的权限，请允许；若 Codex 询问是否退出，请确认。启动程序等待正常退出，不会强制终止应用。
+安装会创建 `~/Applications/Codex Live2D.app`，使用本机 Codex 的图标。把这个启动器拖到 Dock，并移除原来的 Codex 固定项。它第一次就带模型参数打开真正的 Codex，不会先退出再重开，也不会打开终端窗口。Codex 已运行时，点击只唤起窗口，不重启模型进程或打断朗读。启动器保存在应用之外，官方应用更新不会覆盖它。
 
-导入模型和 runtime 后，也可双击 `Install.command`。这两种安装方法都会启用模型并默认注册自动恢复服务。以后可照常通过 Dock、Finder、Spotlight、终端或链接打开 Codex，无需专用启动文件。`Start.command` / `npm start` 仍可用于仅手动启动，不安装恢复服务。右下角齿轮打开设置，扬声器按钮控制朗读。
+导入资源后，也可以双击 `Install.command`。如果 Codex 已经以不带模型参数的方式运行，安装会保留当前窗口；请完成工作后自行退出，下次用新启动器打开。`Start.command` / `npm start` 也采用不重启的方式。
+
+通过 Dock、Finder 或 Spotlight 使用 **Codex Live2D.app**。直接打开原应用，或由链接先启动原应用时，可能缺少模型入口，后台会等待，不退出应用。保持官方安装包原样的前提下，无法保证所有外部入口都带上参数；这个模式优先保证使用过程不被打断。
+
+齿轮打开设置，扬声器按钮控制朗读。
 
 应用不在默认位置时，在启动和安装恢复服务前指定：
 
@@ -77,7 +81,7 @@ export CODEX_APP_PATH="/实际路径/Codex.app"
 npm run install:desktop
 ```
 
-### 4. 任意入口启动后的自动恢复
+### 4. 后台修复，不重启应用
 
 上面的推荐安装已启用此服务。此前仅手动启动过模型的旧安装，可以单独启用：
 
@@ -85,11 +89,9 @@ npm run install:desktop
 npm run install:recovery
 ```
 
-这会注册当前用户的 `~/Library/LaunchAgents/com.codex-live2d.recovery.plist`，每两秒检查一次。成功启用过模型后，可以通过 Dock、Finder、Spotlight、Launchpad、终端或链接打开 Codex。检测依据是应用的运行进程，不依赖启动入口。普通启动或更新后，若应用正在运行但调试入口缺失，等待至少 10 秒，再尝试正常重开一次并挂载模型。结合检查间隔，通常在打开后约 10–15 秒开始恢复；重开可能中断正在进行的任务，请等待模型出现后再开始工作。服务保存安装时使用的应用、Node 和项目路径。
+这会注册当前用户的 `~/Library/LaunchAgents/com.codex-live2d.recovery.plist`，每两秒检查一次。有本机加载入口时，后台自动修复缺失或失败的模型。缺少启动参数时记录 `waiting-for-launcher`，等待下次使用 **Codex Live2D.app** 打开；包括更新后，都不会自动退出或重开 Codex。主动退出应用时不拉起应用，关闭模型会禁用恢复。
 
-若有退出确认，仍需你确认。同一次应用运行只尝试重开一次，避免反复打断工作；手动退出并重新打开后可以再次尝试。主动退出应用时不拉起应用；同版本的普通启动也会恢复；从未成功启用模型的安装不会触发重开，关闭模型会禁用恢复。
-
-恢复服务会检查模型是否就绪、是否挂载到页面、WebGL 状态、渲染帧是否增加及可见画布是否有实际像素，不再把“后台进程还活着”视为加载成功。模型缺失或渲染失败时，优先在不重启 Codex 的情况下重新挂载；失败后按两秒到一分钟的间隔退避重试，并替换失去响应的后台进程。手动收起、暂停、后台窗口和仅聊天时自动隐藏都保留。`state/watcher-health.json` 和 `state/recovery-status.json` 只记录渲染状态，不记录回答正文或 API Key。资源缺失、拒绝退出或未来应用不兼容时仍需修正原因，不能保证自动恢复一定成功。
+恢复服务会检查模型是否就绪、是否挂载到页面、WebGL 状态、渲染帧是否增加及可见画布是否有实际像素，不再把“后台进程还活着”视为加载成功。模型缺失或渲染失败时，优先在不重启 Codex 的情况下重新挂载；失败后按两秒到一分钟的间隔退避重试，并替换失去响应的后台进程。手动收起、暂停、后台窗口和仅聊天时自动隐藏都保留。`state/watcher-health.json` 和 `state/recovery-status.json` 只记录渲染状态，不记录回答正文或 API Key。资源缺失、启动参数缺失或未来应用不兼容时仍需修正原因，不能保证自动恢复一定成功。
 
 已有安装更新时，先运行 `git pull --ff-only`，再运行 `npm run install:desktop`（或再次双击 `Install.command`）。这会重新启用模型并让已注册的服务加载最新恢复代码，保留本机导入的资源和设置。
 
@@ -157,12 +159,12 @@ npm run pack:source  # 把已提交源码打包到 dist/，需要 Git 提交
 | `speech-text.js` | 清理文字和分句 |
 | `fish-client.js` / `fish-host.mjs` | 语音队列、预取、播放和 API 请求 |
 | `inject.mjs` / `cdp.mjs` | 本机挂载与守护进程 |
-| `control.mjs` / `recovery*.mjs` | 启动、关闭与任意入口启动后的恢复 |
+| `control.mjs` / `recovery*.mjs` | 启动、关闭与不重启应用的模型修复 |
 | `setup.mjs` | 导入并验证本机模型与 runtime |
 
 ## 排查与兼容范围
 
-- **打开应用或更新后模型消失：**查看 `state/recovery-status.json` 和 `state/recovery.log`。结束工作并确认退出；自动恢复没有完成时，运行 `npm start`。
+- **打开应用或更新后模型消失：**查看 `state/recovery-status.json` 和 `state/recovery.log`。若状态为 `waiting-for-launcher`，请完成工作后自行退出，再从 Codex Live2D.app 打开；后台不会替你退出。
 - **缺少资源：**使用完整模型目录和兼容 runtime 重新导入，运行 `npm run doctor` 查看结果。
 - **没有朗读：**检查扬声器开关、Key、声音 ID 和模型名。音频上下文有时需要点击一次按钮才允许播放。
 - **模型关闭：**从齿轮入口重新展开；完整移除后用 `npm start` 恢复。
@@ -173,3 +175,5 @@ npm run pack:source  # 把已提交源码打包到 dist/，需要 Git 提交
 ## 许可
 
 项目代码采用 [MIT](LICENSE)。浏览器库见[第三方说明](THIRD_PARTY_NOTICES.md)。模型、Live2D runtime 和商标遵循各自的条款。
+
+移除启动器：`npm run uninstall:launcher`，只删除插件创建的启动器，保留官方 Codex。启动器编译需要 Apple Command Line Tools；缺少时运行 `xcode-select --install`。项目移动后需重新运行 `npm run install:desktop`，更新启动器和后台服务中的路径。

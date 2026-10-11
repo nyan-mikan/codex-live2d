@@ -36,6 +36,11 @@ if(command==='remove'){
   try{const r=await execute(process.execPath,[path.join(root,'inject.mjs'),'--remove','--port',String(port)]);console.log(r.stdout);}catch(error){console.log(error.stderr||error.message);}
   console.log('已关闭角色并停止守护进程。正常退出后再打开 ChatGPT，可关闭临时调试接口。');
 }else if(command==='start'){
+  if(process.argv.includes('--focus')&&(await targets(port)).some(isCodexMain)){
+    await fs.unlink(path.join(stateDir,'recovery-disabled')).catch(()=>{});
+    const saved=await fs.readFile(pidFile,'utf8').then(JSON.parse,()=>null);
+    if(saved?.pid){const {stdout}=await execute('/bin/ps',['-p',String(saved.pid),'-o','args=']).catch(()=>({stdout:''}));if(stdout.trim()===process.execPath+' '+path.join(root,'inject.mjs')+' --watch --port '+port){await launchPhase('ready');process.exit(0);}}
+  }
   if(process.platform!=='darwin')throw new Error('Desktop activation supports macOS only.');
   await checkAssets();
   await launchPhase('checking');
@@ -46,7 +51,11 @@ if(command==='remove'){
     const {executable,bundleId}=await appInfo();
     const running=await appRunning(executable);
     if(fromRecovery&&!running){await launchPhase('cancelled-user-quit');process.exit(0);}
-    if(running&&!restart)throw new Error('ChatGPT 正在运行，需要重启以启用本机调试。请先退出，或明确使用 --restart。');
+    if(running&&(!restart||fromRecovery)){
+      await launchPhase('waiting-for-user-launch');
+      console.log('Codex is already running without the model connection. It was left running. Next time, open Codex Live2D.app. / Codex 正在运行，已保留当前窗口；下次请从 Codex Live2D.app 打开。');
+      process.exit(0);
+    }
     if(running){
       await checkRecovery();
       console.log('正在正常退出 ChatGPT，以启用仅本机可用的调试接口…');

@@ -38,16 +38,18 @@ while(!stopping){
     if(baseline.version)state.lastDebugVersion=baseline.version;
     const watcherPid=await watcherAlive(),heartbeat=await readJSON('watcher-health.json');
     const model=watcherStatus(heartbeat,watcherPid);
-    const observation={...info,disabled:await exists('recovery-disabled'),debugReady:info.running&&(await targets(19335)).some(isCodexMain),watcherAlive:!!watcherPid,modelHealthy:model.healthy,modelLoading:model.loading===true,now:Date.now()};
+    const launchLock=await readJSON('launcher.lock/owner.json');
+    const lockRecent=Number.isInteger(launchLock.pid)&&Date.now()-launchLock.createdAt>=0&&Date.now()-launchLock.createdAt<120000;
+    const launcherBusy=lockRecent&&(await execute('/bin/ps',['-p',String(launchLock.pid),'-o','args=']).then(result=>result.stdout.trim()===process.execPath+' '+path.join(root,'launch.mjs'),()=>false));
+    const observation={...info,launcherBusy,disabled:await exists('recovery-disabled'),debugReady:info.running&&(await targets(19335)).some(isCodexMain),watcherAlive:!!watcherPid,modelHealthy:model.healthy,modelLoading:model.loading===true,now:Date.now()};
     const decision=recoveryDecision(state,observation);
     await writeJSON('recovery-state.json',decision.state);
     const failure=decision.state.failure?.version===info.version?decision.state.failure:null;
     await writeJSON('recovery-status.json',{checkedAt:new Date().toISOString(),version:info.version,running:info.running,debugReady:observation.debugReady,modelHealthy:model.healthy,modelReason:model.reason,disabled:observation.disabled,action:failure&&decision.action==='already-attempted'?'waiting-for-user-quit':decision.action,...(failure?{reason:failure.reason}: {})});
     if(decision.action!==lastAction){console.log(new Date().toISOString(),decision.action,info.version??'app-unavailable');lastAction=decision.action;}
-    if(['restore-update','restore-startup','start-watcher','repair-watcher'].includes(decision.action)){
-      // Same reversible, normal-quit launcher as the user's existing start script.
-      // Previously activated installations recover missing debug startup flags, including Dock launches.
-      const args=[path.join(root,'control.mjs'),'start','--from-recovery'];if(decision.action==='restore-update'||decision.action==='restore-startup')args.push('--restart');
+    if(['start-watcher','repair-watcher'].includes(decision.action)){
+      // Recovery only reattaches the model. It never quits or reopens the application.
+      const args=[path.join(root,'control.mjs'),'start','--from-recovery'];
       try{
         await execute(process.execPath,args,{timeout:180000,maxBuffer:1024*1024});
         // Record the launcher's resulting PID so our own relaunch cannot reset the retry guard.

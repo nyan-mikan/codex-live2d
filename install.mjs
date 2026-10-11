@@ -8,19 +8,21 @@ const execute=promisify(execFile),root=path.dirname(fileURLToPath(import.meta.ur
 export async function installDesktop({run=execute,validate=checkAssets,platform=process.platform,nodeMajor=Number(process.versions.node.split('.')[0])}={}){
   if(platform!=='darwin')throw new Error('Desktop installation supports macOS only.');
   if(nodeMajor<22)throw new Error('Node.js 22 or later is required.');
-  // Validate before requesting any app quit; register recovery only after a verified activation.
+  // Build the launch entry and activate without interrupting a running application.
   await validate();
-  await run(process.execPath,[path.join(root,'control.mjs'),'start','--restart'],{maxBuffer:1024*1024});
+  const launcher=JSON.parse((await run(process.execPath,[path.join(root,'install-launcher.mjs')],{maxBuffer:1024*1024})).stdout.trim());
+  if(!launcher.installed)throw new Error('Desktop launcher installation was not confirmed.');
+  const activation=await run(process.execPath,[path.join(root,'control.mjs'),'start'],{maxBuffer:1024*1024});
   const result=await run(process.execPath,[path.join(root,'install-recovery.mjs')],{maxBuffer:1024*1024});
   const status=JSON.parse(result.stdout.trim());
   if(!status.installed||!status.registered)throw new Error('Automatic recovery registration was not confirmed.');
-  return status;
+  return {...status,launcherPath:launcher.launcherPath,pending:activation.stdout.includes('Next time, open Codex Live2D.app.')};
 }
 if(process.argv[1]===fileURLToPath(import.meta.url)){
   try{
-    await installDesktop();
-    console.log('Installed: companion activated and automatic recovery registered. / 安装完成：模型已启用，自动恢复服务已注册。');
-    console.log('Open Codex through Dock, Finder, Spotlight, a terminal, or a link. / 以后可从 Dock、Finder、Spotlight、终端或链接打开 Codex。');
-    console.log('If startup flags are missing, recovery begins after about 10–15 seconds and normally reopens the app once; rendering checks and remount retries continue afterward. Wait for the model before starting work. / 若加载参数缺失，约10–15秒后开始恢复并正常重开一次，之后持续验证渲染并重试挂载；请等模型出现再开始工作。');
+    const status=await installDesktop();
+    console.log('Installed without automatically quitting Codex. / 安装完成，未自动退出 Codex。');
+    console.log('Pin this launcher to Dock: / 请把这个启动器固定到 Dock:',status.launcherPath);
+    if(status.pending)console.log('The current app has no model connection. Finish your work, quit it yourself, then open the new launcher. / 当前应用缺少模型入口，请结束工作后手动退出，再使用新启动器打开。');
   }catch(error){console.error('Installation incomplete / 安装未完成:',error.message);process.exitCode=1;}
 }
