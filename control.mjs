@@ -4,22 +4,24 @@ import {fileURLToPath} from 'node:url';
 import {spawn,execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import {targets,isCodexMain} from './cdp.mjs';
-import {appRunning,appPids} from './app-process.mjs';
+import {appRunning,watcherPids} from './app-process.mjs';
 import {appPath,appInfo} from './app-config.mjs';
+import {findEndpoint} from './endpoint.mjs';
 import {checkAssets} from './setup.mjs';
 const execute=promisify(execFile);
 const root=path.dirname(fileURLToPath(import.meta.url)), stateDir=path.join(root,'state');
 const command=process.argv[2]||'start', restart=process.argv.includes('--restart');
 const fromRecovery=process.argv.includes('--from-recovery');
 if(process.argv.includes('--delayed'))await new Promise(resolve=>setTimeout(resolve,4000));
-const port=19335, app=appPath;
+const app=appPath;
+const endpoint=await findEndpoint();
+let port=endpoint?.port??19335;
 await fs.mkdir(stateDir,{recursive:true});
 const stopFile=path.join(stateDir,'stop'),pidFile=path.join(stateDir,'watcher.json');
 async function stopWatcher(){
   await fs.writeFile(stopFile,'stop\n');
-  const expected=process.execPath+' '+path.join(root,'inject.mjs')+' --watch --port '+port;
   const {stdout}=await execute('/bin/ps',['-ww','-axo','pid=,args='],{maxBuffer:8*1024*1024});
-  const pids=appPids(stdout,expected);
+  const pids=watcherPids(stdout,process.execPath,path.join(root,'inject.mjs'));
   // Stop only watchers belonging to this checkout; a blocked CDP request must not leave duplicates.
   for(const pid of pids)try{process.kill(pid,'SIGTERM');}catch(error){if(error.code!=='ESRCH')throw error;}
   for(let attempt=0;attempt<20;attempt++){
@@ -36,17 +38,17 @@ if(command==='remove'){
   try{const r=await execute(process.execPath,[path.join(root,'inject.mjs'),'--remove','--port',String(port)]);console.log(r.stdout);}catch(error){console.log(error.stderr||error.message);}
   console.log('已关闭角色并停止守护进程。正常退出后再打开 ChatGPT，可关闭临时调试接口。');
 }else if(command==='start'){
-  if(process.argv.includes('--focus')&&(await targets(port)).some(isCodexMain)){
+  if(process.argv.includes('--focus')&&endpoint){
     await fs.unlink(path.join(stateDir,'recovery-disabled')).catch(()=>{});
     const saved=await fs.readFile(pidFile,'utf8').then(JSON.parse,()=>null);
-    if(saved?.pid){const {stdout}=await execute('/bin/ps',['-p',String(saved.pid),'-o','args=']).catch(()=>({stdout:''}));if(stdout.trim()===process.execPath+' '+path.join(root,'inject.mjs')+' --watch --port '+port){await launchPhase('ready');process.exit(0);}}
+    if(saved?.pid&&saved.port===port){const {stdout}=await execute('/bin/ps',['-p',String(saved.pid),'-o','args=']).catch(()=>({stdout:''}));if(stdout.trim()===process.execPath+' '+path.join(root,'inject.mjs')+' --watch --port '+port){await launchPhase('ready');process.exit(0);}}
   }
   if(process.platform!=='darwin')throw new Error('Desktop activation supports macOS only.');
   await checkAssets();
   await launchPhase('checking');
   await checkRecovery();
   if(!fromRecovery)await fs.unlink(path.join(stateDir,'recovery-disabled')).catch(()=>{});
-  let pages=(await targets(port)).filter(isCodexMain);
+  let pages=endpoint?.pages??[];
   if(!pages.length){
     const {executable,bundleId}=await appInfo();
     const running=await appRunning(executable);
@@ -68,8 +70,8 @@ if(command==='remove'){
     }
     await checkRecovery();
     await launchPhase('opening');
-    await execute('/usr/bin/open',['-na',app,'--args',`--remote-debugging-port=${port}`,'--remote-debugging-address=127.0.0.1']);
-    for(let i=0;i<60;i++){pages=(await targets(port)).filter(isCodexMain);if(pages.length)break;await new Promise(r=>setTimeout(r,500));}
+    await execute('/usr/bin/open',['-a',app,'--args',`--remote-debugging-port=${port}`,'--remote-debugging-address=127.0.0.1']);
+    for(let i=0;i<60;i++){const found=await findEndpoint({preferredPort:port});if(found){port=found.port;pages=found.pages;break;}await new Promise(r=>setTimeout(r,500));}
     if(!pages.length)throw new Error('应用已启动，但未发现可连接的 Codex 主界面调试入口。');
   }
   await launchPhase('injecting');

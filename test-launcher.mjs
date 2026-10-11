@@ -38,7 +38,8 @@ test('Controller leaves an unprepared running app untouched for normal and recov
     await fs.copyFile(new URL('./control.mjs',import.meta.url),path.join(fixture,'control.mjs'));
     const stubs={
       'cdp.mjs':'export const targets=async()=>[];export const isCodexMain=()=>false;',
-      'app-process.mjs':'export const appRunning=async()=>true;export const appPids=()=>[];',
+      'app-process.mjs':'export const appRunning=async()=>true;export const watcherPids=()=>[];',
+      'endpoint.mjs':'export const findEndpoint=async()=>null;',
       'app-config.mjs':`export const appPath='/Applications/ChatGPT.app';export const appInfo=async()=>({executable:appPath+'/Contents/MacOS/ChatGPT',bundleId:'com.openai.codex'});`,
       'setup.mjs':'export const checkAssets=async()=>{};'
     };

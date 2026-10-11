@@ -21,7 +21,7 @@
     "install:recovery": "node install-recovery.mjs",
     "uninstall:recovery": "node install-recovery.mjs --uninstall",
     "preview": "node preview-server.mjs",
-    "verify": "node inject.mjs --verify --port 19335",
+    "verify": "node inject.mjs --verify",
     "test": "node --test test-*.mjs",
     "pack:source": "node scripts/package-source.mjs",
     "install:desktop": "node install.mjs",

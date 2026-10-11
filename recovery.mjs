@@ -3,7 +3,7 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
-import {targets,isCodexMain} from './cdp.mjs';
+import {findEndpoint} from './endpoint.mjs';
 import {recoveryDecision} from './recovery-policy.mjs';
 import {watcherStatus} from './model-health.mjs';
 import {appProcessIds} from './app-process.mjs';
@@ -18,11 +18,11 @@ async function appInfo(){
   try{
     const {version,executable}=await readAppInfo();
     const pids=await appProcessIds(executable);
-    return {version,running:pids.length>0,pid:pids[0]??null};
+    return {version,executable,running:pids.length>0,pid:pids[0]??null};
   }catch{return {version:null,running:false};}
 }
-async function watcherAlive(){
-  const {pid}=await readJSON('watcher.json');if(!Number.isInteger(pid))return false;
+async function watcherAlive(port){
+  const saved=await readJSON('watcher.json'),{pid}=saved;if(!Number.isInteger(pid)||saved.port!==port)return false;
   try{
     const {stdout}=await execute('/bin/ps',['-p',String(pid),'-o','command=']);
     return stdout.includes(path.join(root,'inject.mjs'))&&stdout.includes('--watch')?pid:false;
@@ -36,16 +36,17 @@ while(!stopping){
     const info=await appInfo(),baseline=await readJSON('debug-version.json');
     const state=await readJSON('recovery-state.json');
     if(baseline.version)state.lastDebugVersion=baseline.version;
-    const watcherPid=await watcherAlive(),heartbeat=await readJSON('watcher-health.json');
+    const endpoint=info.running?await findEndpoint({executable:info.executable}):null;
+    const watcherPid=await watcherAlive(endpoint?.port),heartbeat=await readJSON('watcher-health.json');
     const model=watcherStatus(heartbeat,watcherPid);
     const launchLock=await readJSON('launcher.lock/owner.json');
     const lockRecent=Number.isInteger(launchLock.pid)&&Date.now()-launchLock.createdAt>=0&&Date.now()-launchLock.createdAt<120000;
     const launcherBusy=lockRecent&&(await execute('/bin/ps',['-p',String(launchLock.pid),'-o','args=']).then(result=>result.stdout.trim()===process.execPath+' '+path.join(root,'launch.mjs'),()=>false));
-    const observation={...info,launcherBusy,disabled:await exists('recovery-disabled'),debugReady:info.running&&(await targets(19335)).some(isCodexMain),watcherAlive:!!watcherPid,modelHealthy:model.healthy,modelLoading:model.loading===true,now:Date.now()};
+    const observation={...info,launcherBusy,disabled:await exists('recovery-disabled'),debugReady:!!endpoint,watcherAlive:!!watcherPid,modelHealthy:model.healthy,modelLoading:model.loading===true,now:Date.now()};
     const decision=recoveryDecision(state,observation);
     await writeJSON('recovery-state.json',decision.state);
     const failure=decision.state.failure?.version===info.version?decision.state.failure:null;
-    await writeJSON('recovery-status.json',{checkedAt:new Date().toISOString(),version:info.version,running:info.running,debugReady:observation.debugReady,modelHealthy:model.healthy,modelReason:model.reason,disabled:observation.disabled,action:failure&&decision.action==='already-attempted'?'waiting-for-user-quit':decision.action,...(failure?{reason:failure.reason}: {})});
+    await writeJSON('recovery-status.json',{checkedAt:new Date().toISOString(),version:info.version,running:info.running,debugPort:endpoint?.port??null,debugReady:observation.debugReady,modelHealthy:model.healthy,modelReason:model.reason,disabled:observation.disabled,action:failure&&decision.action==='already-attempted'?'waiting-for-user-quit':decision.action,...(failure?{reason:failure.reason}: {})});
     if(decision.action!==lastAction){console.log(new Date().toISOString(),decision.action,info.version??'app-unavailable');lastAction=decision.action;}
     if(['start-watcher','repair-watcher'].includes(decision.action)){
       // Recovery only reattaches the model. It never quits or reopens the application.

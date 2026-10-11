@@ -14,3 +14,14 @@ export async function appProcessIds(executable){
   return appPids(stdout,executable);
 }
 export async function appRunning(executable){return (await appProcessIds(executable)).length>0;}
+
+// Match only this project's watcher, regardless of the selected debug port.
+export function watcherPids(processList,node,entry){
+  const prefix=node+' '+entry+' --watch --port ';
+  return processList.split('\n').flatMap(line=>{
+    const match=/^\s*(\d+)\s+(.+)$/.exec(line);
+    if(!match||!match[2].startsWith(prefix))return [];
+    const suffix=match[2].slice(prefix.length);
+    return /^\d+$/.test(suffix)&&Number(suffix)>=1024&&Number(suffix)<=65535?[Number(match[1])]:[];
+  });
+}

@@ -17,6 +17,7 @@ This is an independent macOS add-on. It attaches to the running desktop interfac
 - A neutral face while speaking, with audio-driven mouth movement.
 - Markdown, emoji, citation/reference markers, and lowercase laughter such as `www` are removed before speech. URLs containing `www` are preserved.
 - Turning the speaker off stops playback and requests and clears queued audio. Turning it back on reads future text only.
+- Automatically reuse the local connection declared by the official Codex main process, including Codex++ launches on other ports. The project stays independent.
 - A lightweight Dock launcher opens the official app with model parameters on the first attempt. Background recovery repairs the companion without automatically quitting Codex.
 
 ## Requirements
@@ -70,6 +71,8 @@ Installation creates `~/Applications/Codex Live2D.app`, using the installed Code
 
 Or double-click `Install.command` after importing assets. If Codex is already running without a model connection, installation leaves it running: finish your work, quit it yourself, then use the new launcher next time. `Start.command` / `npm start` use the same no-restart behavior.
 
+If you already launch Codex through Codex++ or another tool that enables CDP, keep using that entry. After installing the Live2D recovery service, it automatically detects the actual official app port and attaches the model; you do not need to pin a second launcher. No Codex++ configuration is edited. See [startup design and the source comparison](docs/startup-design.md).
+
 Use **Codex Live2D.app** for Dock, Finder or Spotlight launches. Opening the original application directly, or through a link that launches it first, may omit the model connection; recovery waits instead of quitting the app. Keeping the original bundle intact means startup arguments cannot be guaranteed for every external entry point. This mode prioritizes uninterrupted work.
 
 The gear button opens settings; the speaker button toggles speech. Choose **Language → English / 中文** at the top of settings. The first launch follows your system language (Chinese for `zh`, English otherwise); your selection is saved locally and survives reloads. Switching language preserves unsaved form fields and ongoing speech. Assistant text and custom expression labels are kept in their original language.
@@ -89,7 +92,7 @@ The recommended install above already enables this service. For an existing inst
 npm run install:recovery
 ```
 
-This registers `~/Library/LaunchAgents/com.codex-live2d.recovery.plist` for your user account and checks every two seconds. The service restores missing or failed models when the local connection is available. If startup parameters are absent, it records `waiting-for-launcher` and waits for your next launch through **Codex Live2D.app**. It never automatically quits or reopens Codex, including after updates, and respects intentional quits. Stopping the companion disables recovery.
+This registers `~/Library/LaunchAgents/com.codex-live2d.recovery.plist` for your user account and checks every two seconds. The service detects the running official application’s declared debug port and restores missing or failed models when that connection is available, even when it is not port 19335. If startup parameters are absent, it records `waiting-for-launcher` and waits for your next launch through **Codex Live2D.app**. It never automatically quits or reopens Codex, including after updates, and respects intentional quits. Stopping the companion disables recovery.
 
 Recovery verifies actual model readiness, host attachment, WebGL, frame progress, and visible canvas pixels. A live watcher alone is not considered success. Missing or failed renderers are remounted without restarting Codex, with retries backing off from two seconds to one minute. A stale or unhealthy watcher is replaced. Collapsed models, paused animation, background windows and chat-only hiding are preserved. Health summaries in `state/watcher-health.json` and `state/recovery-status.json` contain renderer metadata only, not answer bodies or API keys. Missing assets, absent startup parameters and incompatible future app changes still need correction; automatic recovery cannot guarantee success in those cases.
 

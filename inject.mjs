@@ -2,10 +2,12 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {CDP,targets,isCodexMain} from './cdp.mjs';
+import {findEndpoint} from './endpoint.mjs';
 import {FishHost} from './fish-host.mjs';
 import {modelStatus,sampleModel,retryDelay} from './model-health.mjs';
 const root=path.dirname(fileURLToPath(import.meta.url));
-const args=process.argv.slice(2), port=Number(args[args.indexOf('--port')+1])||19335;
+const args=process.argv.slice(2);
+let port=19335;
 const watch=args.includes('--watch'),remove=args.includes('--remove'),verify=args.includes('--verify'),show=args.includes('--show'),reload=args.includes('--reload');
 const modelDir=path.join(root,'model');
 const types={'.json':'application/json','.png':'image/png','.moc':'application/octet-stream','.mtn':'text/plain','.wav':'audio/wav'};
@@ -19,6 +21,8 @@ export async function payload() {
   return libraries.join('\n;\n')+'\n;globalThis.mountCompanion('+JSON.stringify(await assets())+');';
 }
 if (process.argv[1]===fileURLToPath(import.meta.url)) {
+  const portIndex=args.indexOf('--port');
+  port=portIndex>=0?Number(args[portIndex+1]):(await findEndpoint())?.port??19335;
   if(!Number.isInteger(port)||port<1024||port>65535)throw new Error('Invalid CDP port');
   await fs.mkdir(path.join(root,'state'),{recursive:true});
   const stopFile=path.join(root,'state','stop');

@@ -17,6 +17,7 @@
 - 朗读时使用自然表情，嘴部随声音变化。
 - 朗读前清理 Markdown、emoji、引用标记和 `www` 等笑声；保留网址中的 `www`。
 - 关闭扬声器立即停止播放、取消请求和清空缓存，再开启只读之后的新文字。
+- 自动复用官方 Codex 主进程声明的本机连接，包括 Codex++ 使用的其他端口，项目保持独立。
 - 轻量 Dock 启动器首次就带参数打开官方应用；后台只修复模型，不自动退出 Codex。
 
 ## 环境要求
@@ -70,6 +71,8 @@ npm run install:desktop
 
 导入资源后，也可以双击 `Install.command`。如果 Codex 已经以不带模型参数的方式运行，安装会保留当前窗口；请完成工作后自行退出，下次用新启动器打开。`Start.command` / `npm start` 也采用不重启的方式。
 
+如果平时通过 Codex++ 或其他启用 CDP 的工具打开 Codex，可以继续使用原来的增强入口。安装 Live2D 后台服务后，它会自动识别官方应用的实际端口并挂载模型，无需再固定一个 Live2D 启动器，也不修改 Codex++ 配置。详见[启动设计与源码对照](docs/startup-design.md)。
+
 通过 Dock、Finder 或 Spotlight 使用 **Codex Live2D.app**。直接打开原应用，或由链接先启动原应用时，可能缺少模型入口，后台会等待，不退出应用。保持官方安装包原样的前提下，无法保证所有外部入口都带上参数；这个模式优先保证使用过程不被打断。
 
 齿轮打开设置，扬声器按钮控制朗读。
@@ -89,7 +92,7 @@ npm run install:desktop
 npm run install:recovery
 ```
 
-这会注册当前用户的 `~/Library/LaunchAgents/com.codex-live2d.recovery.plist`，每两秒检查一次。有本机加载入口时，后台自动修复缺失或失败的模型。缺少启动参数时记录 `waiting-for-launcher`，等待下次使用 **Codex Live2D.app** 打开；包括更新后，都不会自动退出或重开 Codex。主动退出应用时不拉起应用，关闭模型会禁用恢复。
+这会注册当前用户的 `~/Library/LaunchAgents/com.codex-live2d.recovery.plist`，每两秒检查一次。后台识别官方应用主进程声明的调试端口，不再固定要求 19335；有加载入口时，自动修复缺失或失败的模型。缺少启动参数时记录 `waiting-for-launcher`，等待下次使用 **Codex Live2D.app** 打开；包括更新后，都不会自动退出或重开 Codex。主动退出应用时不拉起应用，关闭模型会禁用恢复。
 
 恢复服务会检查模型是否就绪、是否挂载到页面、WebGL 状态、渲染帧是否增加及可见画布是否有实际像素，不再把“后台进程还活着”视为加载成功。模型缺失或渲染失败时，优先在不重启 Codex 的情况下重新挂载；失败后按两秒到一分钟的间隔退避重试，并替换失去响应的后台进程。手动收起、暂停、后台窗口和仅聊天时自动隐藏都保留。`state/watcher-health.json` 和 `state/recovery-status.json` 只记录渲染状态，不记录回答正文或 API Key。资源缺失、启动参数缺失或未来应用不兼容时仍需修正原因，不能保证自动恢复一定成功。
 
