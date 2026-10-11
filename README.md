@@ -17,7 +17,7 @@ This is an independent macOS add-on. It attaches to the running desktop interfac
 - A neutral face while speaking, with audio-driven mouth movement.
 - Markdown, emoji, citation/reference markers, and lowercase laughter such as `www` are removed before speech. URLs containing `www` are preserved.
 - Turning the speaker off stops playback and requests and clears queued audio. Turning it back on reads future text only.
-- Optional login service that recovers lost startup arguments after Dock launches and application updates.
+- Automatic recovery service included in the recommended installation: recovers lost startup arguments regardless of how Codex is opened, and after application updates.
 
 ## Requirements
 
@@ -39,7 +39,7 @@ cd codex-live2d
 node --version
 ```
 
-Keep this folder in a permanent location if you enable the recovery service.
+Keep this folder in a permanent location; the recommended installation registers a background recovery service that uses it.
 
 ### 2. Import your model and runtime
 
@@ -59,35 +59,37 @@ The importer validates the referenced files, copies them into `model/`, and stor
 
 Expression presets are optional and supplied in a local model profile; no character-specific presets or fixed motion indexes are built in. Obtain assets and runtimes under their applicable terms; [upstream runtime guidance](https://github.com/guansss/pixi-live2d-display#cubism-core) explains the distinction.
 
-### 3. Check and start
+### 3. Check and install
 
 ```sh
 npm run doctor
-npm start
+npm run install:desktop
 ```
 
 Starting may normally quit and reopen Codex to enable the local debug endpoint at `127.0.0.1:19335` (or local IPv6). Finish active work first. If macOS asks for permission to control the app, allow it; if Codex asks whether to quit, confirm it. The launcher waits for normal exit and never force-kills the app.
 
-You can also double-click `Start.command`. The gear button opens settings; the speaker button toggles speech. Choose **Language → English / 中文** at the top of settings. The first launch follows your system language (Chinese for `zh`, English otherwise); your selection is saved locally and survives reloads. Switching language preserves unsaved form fields and ongoing speech. Assistant text and custom expression labels are kept in their original language.
+Or double-click `Install.command` after importing your model and runtime. Both install methods activate the companion and register automatic recovery by default. After installation, open Codex normally through Dock, Finder, Spotlight, a terminal, or a link; no dedicated launcher is needed. `Start.command` / `npm start` remain available for a manual start without installing the recovery service. The gear button opens settings; the speaker button toggles speech. Choose **Language → English / 中文** at the top of settings. The first launch follows your system language (Chinese for `zh`, English otherwise); your selection is saved locally and survives reloads. Switching language preserves unsaved form fields and ongoing speech. Assistant text and custom expression labels are kept in their original language.
 
 For a nonstandard application location, set this before starting and installing recovery:
 
 ```sh
 export CODEX_APP_PATH="/path/to/Codex.app"
-npm start
+npm run install:desktop
 ```
 
-### 4. Optional: enable Dock and update recovery
+### 4. Automatic recovery after any launch
+
+The recommended install above already enables this service. For an existing installation that was started manually, enable it with:
 
 ```sh
 npm run install:recovery
 ```
 
-This registers `~/Library/LaunchAgents/com.codex-live2d.recovery.plist` for your user account. It checks every 10 seconds. After a successful companion activation, you can keep launching Codex from its usual Dock icon. If a normal launch or application update starts the app without its debug endpoint, the service waits at least 45 seconds, then tries one normal restart and reattaches the companion. With its polling interval, recovery normally begins about 45–60 seconds after opening. This may interrupt active work; wait for the companion to appear before starting a task. The service remembers the selected app path and the Node/project paths used at installation.
+This registers `~/Library/LaunchAgents/com.codex-live2d.recovery.plist` for your user account. It checks every 10 seconds. After a successful companion activation, you can launch Codex through Dock, Finder, Spotlight, Launchpad, a terminal, or a link. Detection uses the running app process, so it does not depend on the launch method. If a normal launch or application update starts the app without its debug endpoint, the service waits at least 45 seconds, then tries one normal restart and reattaches the companion. With its polling interval, recovery normally begins about 45–60 seconds after opening. This may interrupt active work; wait for the companion to appear before starting a task. The service remembers the selected app path and the Node/project paths used at installation.
 
 A quit confirmation may still require your action. A failed attempt is not repeated during the same app run; after you quit and reopen the app, it may try again. It does not reopen an intentionally quit app. The same rule applies to ordinary launches of the same version. Installations that have never activated the companion are left alone; stopping the companion disables recovery.
 
-After importing assets, `Install.command` combines first launch and recovery-service installation.
+To update an existing checkout, run `git pull --ff-only` and then `npm run install:desktop` (or double-click `Install.command` again). This reactivates the companion and reloads the registered service with the latest recovery code. Locally imported assets and settings are retained.
 
 ## Chat-only visibility
 
@@ -151,12 +153,12 @@ Tests mock Fish Audio and do not send paid synthesis requests. `npm run pack:sou
 | `speech-text.js` | Text cleanup and sentence tracking |
 | `fish-client.js` / `fish-host.mjs` | Speech queue, prefetch, playback and API transport |
 | `inject.mjs` / `cdp.mjs` | Local attachment and watcher |
-| `control.mjs` / `recovery*.mjs` | Launch, removal, Dock and update recovery |
+| `control.mjs` / `recovery*.mjs` | Launch, removal and recovery after any launch |
 | `setup.mjs` | Import and validate local model/runtime resources |
 
 ## Troubleshooting and compatibility
 
-- **Model missing after a Dock launch or update:** inspect `state/recovery-status.json` and `state/recovery.log`. Finish active work, confirm normal exit, then run `npm start` if recovery could not complete.
+- **Model missing after opening the app or an update:** inspect `state/recovery-status.json` and `state/recovery.log`. Finish active work, confirm normal exit, then run `npm start` if recovery could not complete.
 - **Missing assets:** rerun setup with the entire model directory and a compatible runtime; `npm run doctor` reports missing resources.
 - **No speech:** check the speaker toggle, API key, voice ID and model. Some audio contexts need a user click to start playback.
 - **Model closed:** reopen it from the gear entry; to restore a fully removed companion, run `npm start`.

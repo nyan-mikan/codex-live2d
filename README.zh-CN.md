@@ -17,7 +17,7 @@
 - 朗读时使用自然表情，嘴部随声音变化。
 - 朗读前清理 Markdown、emoji、引用标记和 `www` 等笑声；保留网址中的 `www`。
 - 关闭扬声器立即停止播放、取消请求和清空缓存，再开启只读之后的新文字。
-- 可安装登录服务，检测 Dock 普通启动或更新后启动参数丢失并恢复模型。
+- 推荐安装流程默认安装自动恢复服务，不论从哪个入口打开 Codex，或应用更新后，都能检测启动参数丢失并恢复模型。
 
 ## 环境要求
 
@@ -39,7 +39,7 @@ cd codex-live2d
 node --version
 ```
 
-若启用自动恢复，请把此目录放在固定位置。
+请把此目录放在固定位置；推荐安装流程会注册使用此路径的后台恢复服务。
 
 ### 2. 导入模型和 runtime
 
@@ -59,35 +59,37 @@ npm run setup -- --model-dir "/模型目录" --model-entry "custom.model.json" -
 
 表情由用户的本机模型配置提供，不内置专属角色预设或固定动作序号。请按资源本身的条款获取模型和 runtime；可参考[上游 runtime 说明](https://github.com/guansss/pixi-live2d-display#cubism-core)。
 
-### 3. 检查并启动
+### 3. 检查并安装
 
 ```sh
 npm run doctor
-npm start
+npm run install:desktop
 ```
 
 启动时可能正常退出并重新打开 Codex，以开启 `127.0.0.1:19335` 或本机 IPv6 上的调试入口，请先结束当前工作。若 macOS 询问控制应用的权限，请允许；若 Codex 询问是否退出，请确认。启动程序等待正常退出，不会强制终止应用。
 
-也可双击 `Start.command`。右下角齿轮打开设置，扬声器按钮控制朗读。
+导入模型和 runtime 后，也可双击 `Install.command`。这两种安装方法都会启用模型并默认注册自动恢复服务。以后可照常通过 Dock、Finder、Spotlight、终端或链接打开 Codex，无需专用启动文件。`Start.command` / `npm start` 仍可用于仅手动启动，不安装恢复服务。右下角齿轮打开设置，扬声器按钮控制朗读。
 
 应用不在默认位置时，在启动和安装恢复服务前指定：
 
 ```sh
 export CODEX_APP_PATH="/实际路径/Codex.app"
-npm start
+npm run install:desktop
 ```
 
-### 4. 可选：安装 Dock 与更新恢复服务
+### 4. 任意入口启动后的自动恢复
+
+上面的推荐安装已启用此服务。此前仅手动启动过模型的旧安装，可以单独启用：
 
 ```sh
 npm run install:recovery
 ```
 
-这会注册当前用户的 `~/Library/LaunchAgents/com.codex-live2d.recovery.plist`，每 10 秒检查一次。成功启用过模型后，可以继续从原来的 Dock 图标打开 Codex。普通启动或更新后，若应用正在运行但调试入口缺失，等待至少 45 秒，再尝试正常重开一次并挂载模型。结合检查间隔，通常在打开后约 45–60 秒开始恢复；重开可能中断正在进行的任务，请等待模型出现后再开始工作。服务保存安装时使用的应用、Node 和项目路径。
+这会注册当前用户的 `~/Library/LaunchAgents/com.codex-live2d.recovery.plist`，每 10 秒检查一次。成功启用过模型后，可以通过 Dock、Finder、Spotlight、Launchpad、终端或链接打开 Codex。检测依据是应用的运行进程，不依赖启动入口。普通启动或更新后，若应用正在运行但调试入口缺失，等待至少 45 秒，再尝试正常重开一次并挂载模型。结合检查间隔，通常在打开后约 45–60 秒开始恢复；重开可能中断正在进行的任务，请等待模型出现后再开始工作。服务保存安装时使用的应用、Node 和项目路径。
 
 若有退出确认，仍需你确认。同一次应用运行期间失败后不反复尝试；手动退出并重新打开后可以再次尝试。主动退出应用时不拉起应用；同版本的普通启动也会恢复；从未成功启用模型的安装不会触发重开，关闭模型会禁用恢复。
 
-导入资源后，双击 `Install.command` 可合并首次启动和恢复服务安装。
+已有安装更新时，先运行 `git pull --ff-only`，再运行 `npm run install:desktop`（或再次双击 `Install.command`）。这会重新启用模型并让已注册的服务加载最新恢复代码，保留本机导入的资源和设置。
 
 ## 可选：模型参数配置
 
@@ -153,12 +155,12 @@ npm run pack:source  # 把已提交源码打包到 dist/，需要 Git 提交
 | `speech-text.js` | 清理文字和分句 |
 | `fish-client.js` / `fish-host.mjs` | 语音队列、预取、播放和 API 请求 |
 | `inject.mjs` / `cdp.mjs` | 本机挂载与守护进程 |
-| `control.mjs` / `recovery*.mjs` | 启动、关闭、Dock 与更新恢复 |
+| `control.mjs` / `recovery*.mjs` | 启动、关闭与任意入口启动后的恢复 |
 | `setup.mjs` | 导入并验证本机模型与 runtime |
 
 ## 排查与兼容范围
 
-- **Dock 启动或更新后模型消失：**查看 `state/recovery-status.json` 和 `state/recovery.log`。结束工作并确认退出；自动恢复没有完成时，运行 `npm start`。
+- **打开应用或更新后模型消失：**查看 `state/recovery-status.json` 和 `state/recovery.log`。结束工作并确认退出；自动恢复没有完成时，运行 `npm start`。
 - **缺少资源：**使用完整模型目录和兼容 runtime 重新导入，运行 `npm run doctor` 查看结果。
 - **没有朗读：**检查扬声器开关、Key、声音 ID 和模型名。音频上下文有时需要点击一次按钮才允许播放。
 - **模型关闭：**从齿轮入口重新展开；完整移除后用 `npm start` 恢复。
