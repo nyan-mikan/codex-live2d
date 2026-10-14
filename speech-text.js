@@ -39,18 +39,26 @@
       return text+(['heading','paragraph','blockquote','code'].includes(t.type)||t.type==='text'&&t.tokens?'\n':'');
     }).join('');
   }
+  const urls=/(?:\b[a-z][a-z0-9+.-]*:\/\/|\bwww\.)([^\s<>"'`，。！？；：、（）【】「」]+)|\b(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,63}(?::\d+)?(?:[/?#][^\s<>"'`，。！？；：、（）【】「」]*)?/gi;
+  function outsideURLs(text,transform){
+    let result='',start=0;
+    for(const match of text.matchAll(urls)){
+      result+=transform(text.slice(start,match.index))+match[0];start=match.index+match[0].length;
+    }
+    return result+transform(text.slice(start));
+  }
+  function stripTrailingPunctuation(text){
+    // Remove decorative tails, including those before a normal sentence terminator
+    // or closing quote. Keep punctuation inside a phrase and every URL span intact.
+    const spans=[...text.matchAll(urls)].map(m=>[m.index,m.index+m[0].length]);
+    return text.replace(/(?:(?:[—–―‐‑‒〜～~…⋯·•﹏]|-{2,})[ \t]*)+(?=[。！？!?\.]|[”’"'）)\]】」』]*[ \t]*(?:\n|$))/gu,(match,offset)=>spans.some(([start,end])=>offset<end&&offset+match.length>start)?match:'');
+  }
   function stripLaughter(text){
     // Keep URL spans intact, including w's in paths, queries and fragments.
     // Only standalone lowercase laughter runs are removed; ordinary words and
     // the uppercase WWW acronym remain readable.
-    const urls=/(?:\b[a-z][a-z0-9+.-]*:\/\/|\bwww\.)([^\s<>"'`，。！？；：、（）【】「」]+)|\b(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,63}(?::\d+)?(?:[/?#][^\s<>"'`，。！？；：、（）【】「」]*)?/gi;
     const laughter=/(?<![A-Za-z0-9_])(?:w{3,}|ｗ{3,})(?![A-Za-z0-9_])/g;
-    let result='',start=0;
-    for(const match of text.matchAll(urls)){
-      result+=text.slice(start,match.index).replace(laughter,'')+match[0];
-      start=match.index+match[0].length;
-    }
-    return result+text.slice(start).replace(laughter,'');
+    return outsideURLs(text,part=>part.replace(laughter,''));
   }
   function cleanMarkdown(raw){
     if(typeof raw!=='string')return '';
@@ -60,9 +68,10 @@
     text=decodeEntities(text).replace(/!?\[([^\]\n]+)\](?:\([^\n)]*\)|\[[^\]\n]*\])/g,'$1')
       .replace(/^\s*\[[^\]]+\]:\s*\S+.*$/gm,'').replace(/<[^>]*>/g,'')
       .replace(/^\s*(?:#{1,6}\s+|>+\s*|[-+*]\s+|\d+[.)]\s+|\[[ xX]\]\s*)/gm,'')
-      .replace(/[`*_~\[\]]/g,'').replace(/\|/g,'，').replace(/\$\$?|\\\(|\\\)|\\\[|\\\]/g,'')
+      .replace(/[`*_\[\]]/g,'').replace(/\|/g,'，').replace(/\$\$?|\\\(|\\\)|\\\[|\\\]/g,'')
       .replace(emoji,'').replace(/[\u200B-\u200D\uFEFF\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,'');
-    text=stripLaughter(text).replace(/[ \t]+/g,' ').replace(/ +([，。！？；：])/g,'$1').replace(/ *\n */g,'\n').replace(/\n{3,}/g,'\n\n').trim();
+    text=outsideURLs(text,part=>part.replace(/~/g,''));
+    text=stripTrailingPunctuation(stripLaughter(text)).replace(/[ \t]+/g,' ').replace(/ +([，。！？；：])/g,'$1').replace(/ *\n */g,'\n').replace(/\n{3,}/g,'\n\n').trim();
     return text;
   }
   function stablePrefix(raw,completed){
@@ -96,7 +105,7 @@
   }
   function sentences(text,completed=false){
     const out=[];let start=0;
-    const push=end=>{const s=text.slice(start,end).trim();start=end;if(/[\p{L}\p{N}]/u.test(s))out.push(s);};
+    const push=end=>{const s=stripTrailingPunctuation(text.slice(start,end)).trim();start=end;if(/[\p{L}\p{N}]/u.test(s))out.push(s);};
     for(let i=0;i<text.length;i++){
       const c=text[i];let end=/[。！？!?\n]/u.test(c);
       if(c==='.'){
@@ -127,5 +136,5 @@
       this.count=Math.max(this.count,list.length);return fresh;
     }
   }
-  globalThis.CompanionSpeechText={stripCitations,stripLaughter,cleanMarkdown,stablePrefix,sentences,SentenceTracker};
+  globalThis.CompanionSpeechText={stripCitations,stripLaughter,stripTrailingPunctuation,cleanMarkdown,stablePrefix,sentences,SentenceTracker};
 })();

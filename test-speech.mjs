@@ -36,6 +36,34 @@ test('Roleplay laughter is omitted while URL hosts, paths, query values and ordi
   assert.equal(cleanMarkdown('awww www2 wwword mywwwname WWW World Wide Web'), 'awww www2 wwword mywwwname WWW World Wide Web');
   assert.equal(cleanMarkdown('https://example.com/?q=www&next=www.example.com www'), 'https://example.com/?q=www&next=www.example.com');
 });
+test('Decorative sentence tails are removed while normal stops, interior punctuation and URLs are preserved',()=>{
+  for(const tail of ['——','～','〜','–','―','……','⋯','·','•','﹏','--','—— ～ ……']){
+    assert.equal(cleanMarkdown('你好'+tail),'你好');
+    assert.equal(cleanMarkdown('你好'+tail+'！再见'+tail+'。'),'你好！再见。');
+  }
+  assert.equal(cleanMarkdown('Hello～. Next——!'), 'Hello. Next!');
+  assert.equal(cleanMarkdown('“你好——。”\n再见～'),'“你好。”\n再见');
+  assert.equal(cleanMarkdown('这是——补充说明；范围 1～5，波浪～线。'),'这是——补充说明；范围 1～5，波浪～线。');
+  assert.equal(cleanMarkdown('请看—— https://example.com/~user?q=~。'),'请看—— https://example.com/~user?q=~。');
+  assert.equal(cleanMarkdown('https://example.com/path——\nwww.example.com/path～'),'https://example.com/path——\nwww.example.com/path～');
+  assert.equal(cleanMarkdown('你好……😊:chatgpt-content-reference{index="0"}'),'你好');
+});
+test('Streaming decorative tails do not submit extra sentences or replay prior speech',()=>{
+  const tracker=new SentenceTracker();
+  assert.deepEqual(tracker.feed(message('第一句～！第二句—')),['第一句！']);
+  assert.deepEqual(tracker.feed(message('第一句～！第二句——')),[]);
+  assert.deepEqual(tracker.feed(message('第一句～！第二句——。')),['第二句。']);
+  assert.deepEqual(tracker.feed(message('第一句～！第二句——。～……',true)),[]);
+});
+test('Fish API receives cleaned sentence tails and never sends a symbols-only tail',async t=>{
+  const dir=await fs.mkdtemp(path.join(os.tmpdir(),'live2d-fish-tails-'));t.after(()=>fs.rm(dir,{recursive:true,force:true}));const requests=[];
+  const host=new FishHost({configPath:path.join(dir,'config.json'),fetchImpl:async(url,options)=>{requests.push(JSON.parse(options.body));return new Response(Uint8Array.of(1,2,3));}});
+  await host.save({enabled:true,apiKey:'test-only-not-real-key',referenceId:'test_voice',model:'s2.1-pro-free'});
+  await host.tts('**你好**—— ～ 😊','owner','tails');await host.tts('来看看～！','owner','stop');
+  await host.tts('https://example.com/~user?q=~','owner','url');
+  assert.deepEqual(requests.map(r=>r.text),['你好','来看看！','https://example.com/~user?q=~']);
+  await assert.rejects(host.tts('—— ～ ……','owner','only-tails'),/没有可以朗读的文字/);assert.equal(requests.length,3);
+});
 test('Incremental laughter creates no speech or duplicate sentences, and a growing URL retains its www',()=>{
   const t=new SentenceTracker();assert.deepEqual(t.feed(message('第一句www。第二句w')),['第一句。']);
   assert.deepEqual(t.feed(message('第一句www。第二句ww')),[]);

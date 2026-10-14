@@ -15,7 +15,7 @@ This is an independent macOS add-on. It attaches to the running desktop interfac
 - New assistant body text is captured incrementally. Thinking, tool output, and commentary are excluded; completed history is skipped.
 - Optional Fish Audio speech, one sentence per request, with the next three sentences prefetched and decoded during playback.
 - A neutral face while speaking, with audio-driven mouth movement.
-- Markdown, emoji, citation/reference markers, and lowercase laughter such as `www` are removed before speech. URLs containing `www` are preserved.
+- Markdown, emoji, citation/reference markers, lowercase laughter such as `www`, and decorative sentence tails such as `——`, `～` and `……` are removed before speech. Normal sentence stops, punctuation inside phrases and URL contents are preserved.
 - Turning the speaker off stops playback and requests and clears queued audio. Turning it back on reads future text only.
 - Automatically reuse the running official application’s declared local connection, regardless of port. No other enhancement tool is required.
 - Open the original Codex from Dock, Finder, Spotlight or links. If its model connection is missing, recovery normally restarts it once after startup.
