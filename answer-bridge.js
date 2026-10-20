@@ -26,7 +26,10 @@
     const scopes=[...document.querySelectorAll('[data-thread-find-target="conversation"]')].filter(visible);
     const scope=scopes.at(-1);if(!scope)return null;
     let base=currentFiber(fiberOf(scope));if(!base)return null;
-    let conversationId=null;
+    // The shared Chat timeline may retain an old conversation on its ancestor
+    // while the visible selection wrappers already belong to the new chat.
+    const presented=[...scope.querySelectorAll('[data-chatgpt-selection-message-id][data-chatgpt-selection-conversation-id]')].filter(node=>visible(node)&&node.closest('[data-thread-find-target="conversation"]')===scope);
+    let conversationId=presented.at(-1)?.getAttribute('data-chatgpt-selection-conversation-id')||null;
     for(let f=base;f&&!conversationId;f=f.return)if(typeof f.memoizedProps?.conversationId==='string')conversationId=f.memoizedProps.conversationId;
     if(!conversationId)return null;
     const raw=new Map(),normalized=new Map();let visited=0;
@@ -65,9 +68,10 @@
     return (clone.textContent||'').trim().slice(0,maxChars);
   }
   function domAnswer(target=null,scope=document){
-    const candidates=[];let commentary=0,unknown=0;
+    const candidates=[];let commentary=0,unknown=0,hiddenTarget=false;
     for(const node of scope.querySelectorAll('[data-markdown-text-style="assistant-message"]')){
-      if(!visible(node))continue;
+      const presented=visible(node);
+      if(!presented&&!target?.id)continue;
       const finalRoot=node.closest('[data-local-conversation-final-assistant]');
       const chatRoot=node.closest('[data-chatgpt-selection-message-id][data-chatgpt-selection-conversation-id]');
       if(!finalRoot&&!chatRoot)continue;
@@ -83,7 +87,8 @@
       if(item?.type!=='assistant-message'||!(finalPhases.has(item.phase)||(chatRoot&&item.phase==null&&typeof item.completed==='boolean'))){unknown++;continue;}
       const id=item.id??item.searchItemId??item.messageId??item.responseAnnotationTargetId??chatRoot?.getAttribute('data-chatgpt-selection-message-id');
       if(!id||!conversationId){unknown++;continue;}
-      if(target&&(target.id!==id||target.conversationId!==conversationId))continue;
+      if(target&&((target.id&&target.id!==id)||target.conversationId!==conversationId))continue;
+      if(!presented){hiddenTarget=true;continue;}
       // Recent Chat builds store a reference directive here while streaming the
       // actual answer inside its DIL renderer. Never read a different message.
       const rendered=typeof item.content==='string'&&item.content.includes('::chatgpt-content-reference{')&&node.querySelector('[data-dil-source-message-id]');
@@ -91,7 +96,7 @@
       candidates.push({id,conversationId,adapter:rendered?'rendered-answer':'answer-data',phase:'final',completed:item.completed===true,text});
     }
     stats.finalCandidates=candidates.length;stats.ignoredCommentary=commentary;stats.ignoredUnknown=unknown;
-    return candidates.at(-1)??null;
+    return candidates.at(-1)??(hiddenTarget?{hiddenTarget:true}:null);
   }
   function send(payload){
     stats.events++;stats.lastPhase=payload.phase;stats.characters+=payload.delta?.length||0;
@@ -107,8 +112,12 @@
     try{
       const timeline=timelineAnswer();let answer=timeline?.scoped?timeline.answer:domAnswer();
       if(timeline?.answer?.text.includes('::chatgpt-content-reference{')){
-        const rendered=domAnswer(answer,timeline.scope);
-        if(rendered?.adapter==='rendered-answer')answer={...answer,text:rendered.text,adapter:rendered.adapter};
+        let rendered=domAnswer(answer,timeline.scope);
+        // Retained hidden turns can be later in React traversal than the
+        // visible answer. Use the presented final body only after confirming
+        // the selected message is hidden, not merely waiting to mount.
+        if(rendered?.hiddenTarget)rendered=domAnswer({conversationId:answer.conversationId},timeline.scope);
+        if(rendered?.adapter==='rendered-answer')answer=rendered;
       }
       // An unresolved body reference is not a text baseline. Sending it first
       // would make a newly mounted answer look like a non-prefix edit forever.

@@ -128,7 +128,7 @@ The key stays in the watcher process by default. If you select “remember,” i
 
 When speech is enabled, cleaned assistant body sentences are sent to Fish Audio. The bridge does not persist answer bodies; audio is cached in memory. Turning speech off cancels playback and synthesis, including prefetch. No body-text popup is shown above the companion.
 
-For reference-backed ChatGPT answers, the bridge follows the rendered body as it grows instead of reading the reference placeholder. It only reads the matching final assistant message and excludes citation pills and interactive controls.
+For reference-backed ChatGPT answers, the bridge follows the rendered body as it grows instead of reading the reference placeholder. It follows the visible conversation after chat switches, excludes retained hidden turns, and only reads final assistant bodies without citation pills or interactive controls.
 
 ## Stop, uninstall, or relocate
 

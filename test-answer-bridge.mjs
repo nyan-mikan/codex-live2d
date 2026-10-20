@@ -85,3 +85,16 @@ test('Plain source content retains priority over frozen rendered Markdown',()=>{
   const f=fixture({content:'数据先到：'});f.source.append('旧的渲染');const h=run(f);
   assert.equal(h.events.at(-1).text,'数据先到：');f.item.content+='实时正文。';h.tick();assert.equal(h.events.at(-1).delta,'实时正文。');assert.equal(h.health().source,'message-data');
 });
+test('Visible conversation identity wins over retained ancestors and hidden old chat messages',()=>{
+  const f=fixture({conversationId:'current'}),old=fixture({conversationId:'old',id:'old-answer'});
+  f.base.memoizedProps={};f.base.return={memoizedProps:{conversationId:'old'}};
+  old.scope.attrs.hidden='';f.scope.append(old.scope);f.base.child.sibling=old.base;
+  f.source.append('当前聊天正文。');old.source.append('OLD_HISTORY');
+  const h=run(f);assert.equal(h.events.at(-1).conversationId,'current');assert.equal(h.events.at(-1).text,'当前聊天正文。');assert.equal(h.health().error,null);
+});
+test('A retained hidden final turn cannot replace the visible answer from the same conversation',()=>{
+  const f=fixture(),old=fixture({id:'old-answer',completed:true});
+  old.scope.attrs.hidden='';f.scope.append(old.scope);f.base.child.sibling=old.base;
+  f.source.append('当前正文。');old.source.append('OLD_HISTORY');
+  const h=run(f);assert.equal(h.events.at(-1).id,'answer');assert.equal(h.events.at(-1).text,'当前正文。');assert.equal(h.events.at(-1).completed,false);
+});
