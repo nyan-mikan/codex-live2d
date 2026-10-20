@@ -3,7 +3,7 @@
   globalThis.__codexCompanionAnswerBridge?.stop();
   const finalPhases=new Set(['final','final_answer']),maxChars=100000;
   let stopped=false,last=null,sequence=0,interval;
-  const stats={version:3,events:0,streamingEvents:0,characters:0,finalCandidates:0,ignoredCommentary:0,ignoredUnknown:0,active:false,lastPhase:null,source:null,error:null,samples:[]};
+  const stats={version:4,events:0,streamingEvents:0,characters:0,finalCandidates:0,ignoredCommentary:0,ignoredUnknown:0,active:false,lastPhase:null,source:null,error:null,samples:[]};
   const fiberOf=node=>node?.[Object.keys(node).find(k=>k.startsWith('__reactFiber$'))];
   function currentFiber(fiber){
     if(!fiber)return null;
@@ -54,11 +54,19 @@
     walk(base,conversationId);
     const candidates=raw.size?[...raw.values()]:[...normalized.values()];
     stats.finalCandidates=candidates.length;
-    return {scoped:true,answer:candidates.at(-1)??null};
+    return {scoped:true,scope,answer:candidates.at(-1)??null};
   }
-  function domAnswer(){
+  function renderedBody(node){
+    const clone=node.cloneNode(true);
+    // DIL source pills and interactive widgets are controls, not spoken prose.
+    for(const n of clone.querySelectorAll('script,style,template,button,[role="button"],input,select,textarea,[role="radiogroup"],[data-testid="chatgpt-citation"],[hidden],[aria-hidden="true"],[role="status"],[role="alert"],.sr-only,[data-thread-find-skip]'))n.remove();
+    for(const br of clone.querySelectorAll('br'))br.replaceWith('\n');
+    for(const block of clone.querySelectorAll('p,pre,li,h1,h2,h3,h4,h5,h6,blockquote,tr,[data-d-component="list-item"],[data-d-component="table-row"]'))block.append('\n');
+    return (clone.textContent||'').trim().slice(0,maxChars);
+  }
+  function domAnswer(target=null,scope=document){
     const candidates=[];let commentary=0,unknown=0;
-    for(const node of document.querySelectorAll('[data-markdown-text-style="assistant-message"]')){
+    for(const node of scope.querySelectorAll('[data-markdown-text-style="assistant-message"]')){
       if(!visible(node))continue;
       const finalRoot=node.closest('[data-local-conversation-final-assistant]');
       const chatRoot=node.closest('[data-chatgpt-selection-message-id][data-chatgpt-selection-conversation-id]');
@@ -73,18 +81,14 @@
       if(item?.phase==='commentary'){commentary++;continue;}
       // Ordinary Chat has no phase in some versions; only its dedicated answer wrapper qualifies.
       if(item?.type!=='assistant-message'||!(finalPhases.has(item.phase)||(chatRoot&&item.phase==null&&typeof item.completed==='boolean'))){unknown++;continue;}
-      const id=item.searchItemId??item.messageId??item.responseAnnotationTargetId??chatRoot?.getAttribute('data-chatgpt-selection-message-id');
+      const id=item.id??item.searchItemId??item.messageId??item.responseAnnotationTargetId??chatRoot?.getAttribute('data-chatgpt-selection-message-id');
       if(!id||!conversationId){unknown++;continue;}
-      let text;
-      if(typeof item.content==='string')text=item.content.slice(0,maxChars);
-      else{
-        const clone=node.cloneNode(true);
-        for(const n of clone.querySelectorAll('script,style,template,button,[data-testid="chatgpt-citation"],[hidden],[aria-hidden="true"],[role="status"],[role="alert"],.sr-only,[data-thread-find-skip]'))n.remove();
-        for(const br of clone.querySelectorAll('br'))br.replaceWith('\n');
-        for(const block of clone.querySelectorAll('p,pre,li,h1,h2,h3,h4,h5,h6,blockquote,tr'))block.append('\n');
-        text=(clone.textContent||'').trim().slice(0,maxChars);
-      }
-      candidates.push({id,conversationId,adapter:'answer-data',phase:'final',completed:item.completed===true,text});
+      if(target&&(target.id!==id||target.conversationId!==conversationId))continue;
+      // Recent Chat builds store a reference directive here while streaming the
+      // actual answer inside its DIL renderer. Never read a different message.
+      const rendered=typeof item.content==='string'&&item.content.includes('::chatgpt-content-reference{')&&node.querySelector('[data-dil-source-message-id]');
+      const text=typeof item.content==='string'&&!rendered?item.content.slice(0,maxChars):renderedBody(node);
+      candidates.push({id,conversationId,adapter:rendered?'rendered-answer':'answer-data',phase:'final',completed:item.completed===true,text});
     }
     stats.finalCandidates=candidates.length;stats.ignoredCommentary=commentary;stats.ignoredUnknown=unknown;
     return candidates.at(-1)??null;
@@ -101,7 +105,14 @@
   function scan(){
     if(stopped||document.hidden)return;
     try{
-      const timeline=timelineAnswer(),answer=timeline?.scoped?timeline.answer:domAnswer();
+      const timeline=timelineAnswer();let answer=timeline?.scoped?timeline.answer:domAnswer();
+      if(timeline?.answer?.text.includes('::chatgpt-content-reference{')){
+        const rendered=domAnswer(answer,timeline.scope);
+        if(rendered?.adapter==='rendered-answer')answer={...answer,text:rendered.text,adapter:rendered.adapter};
+      }
+      // An unresolved body reference is not a text baseline. Sending it first
+      // would make a newly mounted answer look like a non-prefix edit forever.
+      if(answer?.text.includes('::chatgpt-content-reference{')&&!answer.text.replace(/::chatgpt-content-reference\{[^}\n]*\}/g,'').trim())answer={...answer,text:'',adapter:'pending-rendered-answer'};
       if(!answer){stats.active=false;if(last){last=null;send({phase:'reset'});}return;}
       stats.active=true;stats.source=answer.adapter;
       const key=answer.conversationId+':'+answer.id,text=answer.text;
