@@ -22,8 +22,9 @@
     let context=null,source=null,analyser=null,levels=null,finish=null;
     function stop(){if(source){source.onended=null;try{source.stop();}catch{}source.disconnect();source=null;}finish?.();finish=null;}
     return {
-      async unlock(){context??=new AudioContext();if(context.state!=='running')await context.resume();return context.state==='running';},
+      async unlock(){if(!context||context.state==='closed'){stop();context=new AudioContext();analyser=null;levels=null;}if(context.state!=='running')await context.resume();return context.state==='running';},
       ready(){return context?.state==='running';},
+      state(){return context?.state??'uninitialized';},
       mouth(){if(!source||!analyser)return 0;analyser.getByteTimeDomainData(levels);let sum=0;for(const v of levels)sum+=((v-128)/128)**2;return Math.min(1,Math.sqrt(sum/levels.length)*5);},
       async prepare(result,signal){
         if(!context||context.state!=='running')throw new Error('请点“试听”或重新启用朗读，允许播放声音。');
@@ -44,6 +45,16 @@
       dispose(){stop();void context?.close();}
     };
   }
+  // Resume only on real user gestures; ordinary chat interaction is enough.
+  // No input contents are inspected and the application's events are untouched.
+  function bindAudioActivation(controller,{target=globalThis.document,signal,shouldActivate=()=>true}={}){
+    const activate=event=>{
+      if(!event.isTrusted||!shouldActivate())return;
+      const h=controller.health();
+      if(h.enabled&&h.configured&&!h.audioReady)void controller.unlock();
+    };
+    for(const type of ['pointerdown','keydown'])target.addEventListener(type,activate,{capture:true,passive:true,signal});
+  }
   function createController({transport=nativeTransport(),player=audioPlayer(),onChange=()=>{},onConfig=()=>{},t=value=>value}={}){
     const tracker=new CompanionSpeechText.SentenceTracker();
     let config={enabled:false,configured:false,hasKey:false,rememberKey:false,referenceId:'',model:'s2.1-pro-free'},lastMessage=null,queue=[],slots=[],producer=null,current=null,epoch=0,disposed=false,mutedKey=null,failed=false,saving=false;
@@ -51,7 +62,7 @@
     const prefetchLimit=3;
     const stats={submitted:0,played:0,phase:'loading',message:'正在连接 Fish Audio 设置…',speaking:false};
     const keyOf=m=>m?m.conversationId+':'+m.id:null;
-    const health=()=>({...stats,message:t(stats.message),enabled:config.enabled,configured:config.configured,hasKey:config.hasKey,pending:queue.length+slots.length,cached:slots.filter(j=>j.ready).length,preparing:producer?1:0,prefetchLimit,audioReady:player.ready()});
+    const health=()=>({...stats,message:t(stats.message),enabled:config.enabled,configured:config.configured,hasKey:config.hasKey,pending:queue.length+slots.length,cached:slots.filter(j=>j.ready).length,preparing:producer?1:0,prefetchLimit,audioReady:player.ready(),audioState:player.state?.()??(player.ready()?'running':'suspended')});
     const notify=(phase,message)=>{stats.phase=phase;stats.message=message;onChange(health());};
     function cancel(skipCurrent=false,silent=false){
       epoch++;queue=[];
@@ -146,5 +157,5 @@
     };
     return controller;
   }
-  globalThis.CompanionFish={createController,nativeTransport,audioPlayer};
+  globalThis.CompanionFish={createController,nativeTransport,audioPlayer,bindAudioActivation};
 })();

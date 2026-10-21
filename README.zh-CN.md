@@ -171,7 +171,7 @@ npm run pack:source  # 把已提交源码打包到 dist/，需要 Git 提交
 
 - **打开应用或更新后模型消失：**查看 `state/recovery-status.json` 和日志。`wait-for-startup` 表示准备执行一次重启，`already-attempted` 或 `waiting-for-user-quit` 表示尝试失败且不会循环重启。处理退出确认、检查资源，再手动退出并打开 Codex 可重新尝试。
 - **缺少资源：**使用完整模型目录和兼容 runtime 重新导入，运行 `npm run doctor` 查看结果。
-- **没有朗读：**检查扬声器开关、Key、声音 ID 和模型名。音频上下文有时需要点击一次按钮才允许播放。
+- **没有朗读：**检查扬声器开关、Key、声音 ID 和模型名。声音被暂停时，在聊天中正常点击或输入即可；模型可见且朗读已启用时，会借助这次真实操作自动恢复播放。关闭朗读时不会自动开启。
 - **模型关闭：**从齿轮入口重新展开；完整移除后用 `npm start` 恢复。
 - **Work / Chat 视图：**监听器包含 Codex、ChatGPT Work、ChatGPT Chat 的数据适配，但依赖内部页面元数据，需在你的版本上分别验证，不能保证所有未来更新自动兼容。
 

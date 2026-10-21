@@ -161,6 +161,7 @@ globalThis.mountCompanion = async function mountCompanion(assetMap, options = {}
   listen(languageSelect,'change',()=>setLanguage(languageSelect.value));
   listen(languageSelect,'keydown',event=>{if(event.key!=='Escape')event.stopPropagation();});
   await speechController.init();
+  CompanionFish.bindAudioActivation(speechController,{signal:abort.signal,shouldActivate:()=>!disposed&&!state.collapsed&&!state.hidden&&!document.hidden});
   if(speechController.config().enabled)void speechController.unlock();
   function receiveAnswer(message) {
     if(disposed||!message||!['final','reset'].includes(message.phase))return false;

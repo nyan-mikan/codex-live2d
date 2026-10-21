@@ -170,7 +170,7 @@ Tests mock Fish Audio and do not send paid synthesis requests. `npm run pack:sou
 
 - **Model missing after opening or updating Codex:** Check `state/recovery-status.json` and `state/recovery.log`. `wait-for-startup` precedes the one-time restart; `already-attempted` or `waiting-for-user-quit` indicates a failed attempt that will not loop. Resolve any normal-quit prompt, verify assets, then quit and open Codex yourself to allow a new attempt.
 - **Missing assets:** rerun setup with the entire model directory and a compatible runtime; `npm run doctor` reports missing resources.
-- **No speech:** check the speaker toggle, API key, voice ID and model. Some audio contexts need a user click to start playback.
+- **No speech:** check the speaker toggle, API key, voice ID and model. If audio is suspended, click or type in the chat: enabled speech resumes automatically on a real interaction while the companion is visible. Muted speech stays off.
 - **Model closed:** reopen it from the gear entry; to restore a fully removed companion, run `npm start`.
 - **Work/Chat views:** the bridge includes adapters for Codex, ChatGPT Work and ChatGPT Chat data. They depend on internal page metadata; verify your installed build. Automatic compatibility across future updates is not guaranteed.
 
