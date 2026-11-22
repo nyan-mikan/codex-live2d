@@ -1,10 +1,36 @@
 /* Runs in a dedicated CDP isolated world; never changes the app's own globals. */
-globalThis.mountCompanion = async function mountCompanion(assetMap, options = {}) {
+// Shared across payload reloads in this isolated world.
+globalThis.Live2DLifecycle = globalThis.Live2DLifecycle?.current ? globalThis.Live2DLifecycle : (() => {
+  const pending=new Map();
+  return {
+    current(key){return pending.get(key);},
+    mount(key,start){
+      if(pending.has(key))return pending.get(key);
+      const promise=Promise.resolve().then(start);pending.set(key,promise);
+      const release=()=>{if(pending.get(key)===promise)pending.delete(key);};
+      void promise.then(release,release);return promise;
+    },
+    replace(document){
+      for(const host of document.querySelectorAll('[data-live2d-companion="true"]')){
+        host.dispatchEvent(new Event('codex-live2d-dispose'));host.remove();
+      }
+    },
+    retain(host,dispose){
+      const document=host.ownerDocument;
+      const owners=[...document.querySelectorAll('[data-live2d-companion="true"]')];
+      if(owners.length&&owners.at(-1)!==host){dispose();return false;}
+      if(!host.isConnected)document.body.append(host);
+      return true;
+    }
+  };
+})();
+globalThis.mountCompanion = function mountCompanion(assetMap, options = {}) {
+  return Live2DLifecycle.mount("page",async()=>{
   if (globalThis.__codexCompanion && !globalThis.__codexCompanion.closed) return globalThis.__codexCompanion.health();
   const PIXI = globalThis.PIXI;
   if (!PIXI?.live2d?.Cubism2ModelSettings) throw new Error('Live2D 2.1 runtime is missing');
   const urls = new Map();
-  let app, model, observer, resizeObserver, speechController, wasSpeaking=false, disposed = false;
+  let app, model, observer, resizeObserver, speechController, api, wasSpeaking=false, disposed = false;
   const abort = new AbortController();
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
   const saved = (() => { try { return JSON.parse(localStorage.getItem('codex-live2d-display-v1') || '{}'); } catch { return {}; } })();
@@ -21,7 +47,7 @@ globalThis.mountCompanion = async function mountCompanion(assetMap, options = {}
   const expressions = Object.fromEntries(Object.entries(profile.expressions).map(([name,entry])=>[name,entry.parameters]));
   const expressionParameters=[...new Set([...Object.keys(neutral),...Object.values(expressions).flatMap(entry=>Object.keys(entry))])];
   const weights = Object.fromEntries(Object.keys(expressions).map(name=>[name,0]));
-  document.getElementById('codex-live2d-companion')?.remove();
+  Live2DLifecycle.replace(document);
   const host = document.createElement('aside');
   host.id = 'codex-live2d-companion';
   host.dataset.live2dCompanion='true';
@@ -160,7 +186,9 @@ globalThis.mountCompanion = async function mountCompanion(assetMap, options = {}
   }
   listen(languageSelect,'change',()=>setLanguage(languageSelect.value));
   listen(languageSelect,'keydown',event=>{if(event.key!=='Escape')event.stopPropagation();});
+  listen(host,'codex-live2d-dispose',destroy);
   await speechController.init();
+  if(disposed)return {closed:true};
   CompanionFish.bindAudioActivation(speechController,{signal:abort.signal,shouldActivate:()=>!disposed&&!state.collapsed&&!state.hidden&&!document.hidden});
   if(speechController.config().enabled)void speechController.unlock();
   function receiveAnswer(message) {
@@ -270,7 +298,7 @@ globalThis.mountCompanion = async function mountCompanion(assetMap, options = {}
   }
   function destroy() {
     if (disposed) return;
-    disposed = true; api.closed = true;
+    disposed = true; if(api)api.closed = true;
     document.dispatchEvent(new CustomEvent('codex-live2d-answer-control',{detail:JSON.stringify({action:'stop'})}));
     document.dispatchEvent(new CustomEvent('codex-live2d-page-control',{detail:'stop'}));
     speechController?.dispose();
@@ -279,9 +307,9 @@ globalThis.mountCompanion = async function mountCompanion(assetMap, options = {}
     for (const url of urls.values()) URL.revokeObjectURL(url);
     urls.clear(); host.remove();
   }
-  const api = globalThis.__codexCompanion = {
+  api = globalThis.__codexCompanion = {
     closed:false, host, state,
-    health() { return { version:11, chatOnly:state.chatOnly, hiddenReason:state.hiddenReason, language:state.language, talking:state.talking, effectiveExpression:state.talking?'neutral':state.expression, voice:speechController.health(), answer:{connected:answer.connected,characters:answer.text.length,deltaCharacters:answer.delta.length,events:answer.events,completed:answer.completed,visible:false}, collapsed:state.collapsed, ready:!!model && !disposed, closed:disposed, frames:state.frames, paused:state.paused, hidden:state.hidden, interactive:state.interactive, follow:state.follow, expression:state.expression, lower:state.lower, gaze:{target:state.gaze,current:model&&!disposed?{x:model.internalModel.focusController.x,y:model.internalModel.focusController.y}:null}, renderedFace:state.renderedFace, bounds:state.bounds, viewport:[innerWidth,innerHeight], size:[canvas.clientWidth,canvas.clientHeight], webglLost:!!app?.renderer?.gl?.isContextLost(), error:state.error, motions:model && !disposed ? Object.fromEntries(Object.entries(model.internalModel.motionManager.definitions).map(([k,v])=>[k,v.length])) : null }; },
+    health() { return { hostCount:document.querySelectorAll('[data-live2d-companion="true"]').length, version:12, chatOnly:state.chatOnly, hiddenReason:state.hiddenReason, language:state.language, talking:state.talking, effectiveExpression:state.talking?'neutral':state.expression, voice:speechController.health(), answer:{connected:answer.connected,characters:answer.text.length,deltaCharacters:answer.delta.length,events:answer.events,completed:answer.completed,visible:false}, collapsed:state.collapsed, ready:!!model && !disposed, closed:disposed, frames:state.frames, paused:state.paused, hidden:state.hidden, interactive:state.interactive, follow:state.follow, expression:state.expression, lower:state.lower, gaze:{target:state.gaze,current:model&&!disposed?{x:model.internalModel.focusController.x,y:model.internalModel.focusController.y}:null}, renderedFace:state.renderedFace, bounds:state.bounds, viewport:[innerWidth,innerHeight], size:[canvas.clientWidth,canvas.clientHeight], webglLost:!!app?.renderer?.gl?.isContextLost(), error:state.error, motions:model && !disposed ? Object.fromEntries(Object.entries(model.internalModel.motionManager.definitions).map(([k,v])=>[k,v.length])) : null }; },
     pixels() {
       if (!app || !model || disposed) return null;
       // Diagnostic renders must not mask a stalled animation by advancing its frame counter.
@@ -384,7 +412,7 @@ globalThis.mountCompanion = async function mountCompanion(assetMap, options = {}
     app.renderer.on('postrender',()=>state.frames++);
     model.update(16);app.render();layout();
     listen(window,'resize',layout,{passive:true});
-    observer=new MutationObserver(records=>{if(!host.isConnected&&!disposed)document.body.append(host);if(records.some(record=>record.target!==host))checkOcclusion();});
+    observer=new MutationObserver(records=>{if(disposed||!Live2DLifecycle.retain(host,destroy))return;if(records.some(record=>record.target!==host))checkOcclusion();});
     observer.observe(document.body,{childList:true,subtree:true,attributes:true,attributeFilter:['aria-modal','open','aria-expanded','aria-hidden','hidden','inert','data-state','data-slate-sidebar-peeking','data-app-shell-responsive-sidebar','data-app-shell-docking-peek','class','style']});
     refreshExpression();
     host.dataset.ready='true';api.setVisible(!state.collapsed);checkOcclusion();
@@ -394,4 +422,5 @@ globalThis.mountCompanion = async function mountCompanion(assetMap, options = {}
     state.error=String(error?.stack||error);status.textContent=t('加载失败：{error}',{error:error.message||error});panel.hidden=false;badge.setAttribute('aria-expanded','true');console.error('[Codex Companion]',error);
     app?.stop();throw error;
   }
+  });
 };

@@ -96,6 +96,8 @@ This registers `~/Library/LaunchAgents/com.codex-live2d.recovery.plist` and chec
 
 Recovery verifies actual model readiness, host attachment, WebGL, frame progress and visible canvas pixels. Once the app has a connection, failed models and watchers are repaired without an app restart. Collapsed models, paused animation, background windows and chat-only hiding are preserved. Health summaries contain renderer metadata only, not answer bodies or API keys. Quit prompts, missing assets and incompatible future app changes may need manual correction; recovery cannot guarantee success in those cases.
 
+Concurrent loads share one activation. Replacing the companion disposes the previous instance, and a replaced host cannot reattach itself. Recovery also checks for duplicate model hosts.
+
 To update an existing checkout, run `git pull --ff-only` and then `npm run install:desktop` (or double-click `Install.command` again). This reactivates the companion and reloads the registered service with the latest recovery code. Locally imported assets and settings are retained.
 
 ## Chat-only visibility

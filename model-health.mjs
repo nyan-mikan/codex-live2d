@@ -9,6 +9,7 @@ export function modelStatus(snapshot,previous={},now=Date.now(),stallMs=15000){
   if(!snapshot.ready)return result(false,'not-ready');
   if(snapshot.webglLost)return result(false,'webgl-lost');
   if(snapshot.connected===false)return result(false,'detached');
+  if(snapshot.hostCount>1)return result(false,'duplicate-models');
   for(const [key,reason] of [['hidden','hidden-by-setting'],['collapsed','collapsed'],['pageHidden','background']]){
     if(snapshot[key]){progress.lastProgressAt=now;return result(true,reason);}
   }
@@ -19,7 +20,7 @@ export function modelStatus(snapshot,previous={},now=Date.now(),stallMs=15000){
   return result(true,'rendering');
 }
 export async function sampleModel(session,world,{apiName='__codexCompanion',pixels=false}={}){
-  return session.evaluate(`(()=>{const api=globalThis[${JSON.stringify(apiName)}];if(!api)return null;const h=api.health();return {ready:h.ready,closed:h.closed,error:!!h.error,frames:h.frames,webglLost:h.webglLost,hidden:h.hidden,collapsed:h.collapsed,paused:h.paused,pageHidden:document.hidden,connected:!!api.host?.isConnected,...(${pixels}&&!h.hidden&&!h.collapsed&&!document.hidden?{pixels:api.pixels()}: {})};})()`,world);
+  return session.evaluate(`(()=>{const api=globalThis[${JSON.stringify(apiName)}];if(!api)return null;const h=api.health();return {ready:h.ready,closed:h.closed,error:!!h.error,frames:h.frames,hostCount:h.hostCount,webglLost:h.webglLost,hidden:h.hidden,collapsed:h.collapsed,paused:h.paused,pageHidden:document.hidden,connected:!!api.host?.isConnected,...(${pixels}&&!h.hidden&&!h.collapsed&&!document.hidden?{pixels:api.pixels()}: {})};})()`,world);
 }
 export function watcherStatus(heartbeat,pid,now=Date.now()){
   if(!heartbeat||heartbeat.pid!==pid)return {healthy:false,reason:'missing-heartbeat'};

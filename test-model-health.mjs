@@ -2,6 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {modelStatus,sampleModel,watcherStatus,retryDelay} from './model-health.mjs';
 const good={ready:true,frames:100,connected:true,pixels:{opaque:50}};
+test('Overlapping model hosts trigger repair even if both can render',()=>{
+  assert.equal(modelStatus({...good,hostCount:1}).healthy,true);
+  assert.equal(modelStatus({...good,hostCount:2}).reason,'duplicate-models');
+  assert.equal(modelStatus({...good,hostCount:2,hidden:true}).healthy,false);
+});
 test('Presence alone is insufficient: errors, closed models, lost GL and blank pixels fail verification',()=>{
   assert.equal(modelStatus(good,{},1000).healthy,true);
   for(const [snapshot,reason] of [[null,'missing'],[{...good,closed:true},'closed'],[{...good,error:true},'render-error'],[{...good,ready:false},'not-ready'],[{...good,webglLost:true},'webgl-lost'],[{...good,connected:false},'detached'],[{...good,pixels:{opaque:0}},'blank-canvas'],[{...good,pixels:null},'blank-canvas'],[{...good,frames:undefined},'missing-frame-counter']]){

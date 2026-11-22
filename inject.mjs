@@ -16,9 +16,13 @@ export async function assets() {
   async function walk(dir){for(const entry of await fs.readdir(dir,{withFileTypes:true})){const p=path.join(dir,entry.name);if(entry.isDirectory())await walk(p);else if(types[path.extname(p)])result[path.relative(modelDir,p).split(path.sep).join('/')]={type:types[path.extname(p)],data:(await fs.readFile(p)).toString('base64')};}}
   await walk(modelDir);return result;
 }
+export function guardedPayload(libraries,modelAssets){
+  // Do not reload WebGL/runtime globals while another activation is awaiting I/O.
+  return 'if(globalThis.Live2DLifecycle?.current?.("page")){globalThis.Live2DLifecycle.current("page")}else{\n'+libraries.join('\n;\n')+'\n;globalThis.mountCompanion('+JSON.stringify(modelAssets)+');\n}';
+}
 export async function payload() {
   const libraries=await Promise.all(['vendor/pixi.min.js','vendor/unsafe-eval.min.js','vendor/live2d.min.js','vendor/cubism2.min.js','vendor/marked.umd.js','speech-text.js','i18n.js','fish-client.js','model-profile.js','view-state.js','renderer.js'].map(p=>fs.readFile(path.join(root,p),'utf8')));
-  return libraries.join('\n;\n')+'\n;globalThis.mountCompanion('+JSON.stringify(await assets())+');';
+  return guardedPayload(libraries,await assets());
 }
 if (process.argv[1]===fileURLToPath(import.meta.url)) {
   const portIndex=args.indexOf('--port');
